@@ -1,0 +1,182 @@
+.auth-page-wrapper .auth-page-content {
+  padding-bottom: 60px;
+  position: relative;
+  z-index: 2;
+  width: 100%;
+}
+
+.auth-page-content.auth--bg {
+  background: linear-gradient(141deg, #ffd6d6 0%, #fff2e1 51%, #d3f3ff 75%);
+  position: relative;
+  z-index: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 50px 0;
+  min-height: 100vh;
+  display: grid;
+  align-items: center;
+}
+.auth-page-content.auth--bg::before {
+  background: linear-gradient(141deg, #fff 0%, #fff 51%, #ffffff2f 75%);
+  content: "";
+  display: block;
+  width: 260px;
+  height: 260px;
+  border-radius: 50%;
+  position: absolute;
+  left: 90px;
+  top: 10%;
+  opacity: 0.5;
+  animation: 14s linear infinite jump;
+  z-index: -1;
+}
+@keyframes jump {
+  0% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(100px);
+  }
+  100% {
+    transform: translateY(0%);
+  }
+}
+.auth-page-content.auth--bg::after {
+  background: linear-gradient(141deg, #ffffff45 0%, #fff 51%, #ffffffa4 75%);
+  content: "";
+  display: block;
+  width: 260px;
+  height: 260px;
+  border-radius: 50%;
+  position: absolute;
+  right: 90px;
+  bottom: 15%;
+  opacity: 0.5;
+  animation: 4s linear infinite jump;
+  z-index: -1;
+}
+.auth-page-wrapper .footer {
+  left: 0;
+  background-color: transparent;
+  color: var(--ig-body-color);
+}
+
+.auth-one-bg-position {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  height: 380px;
+}
+@media (max-width: 575.98px) {
+  .auth-one-bg-position {
+    height: 280px;
+  }
+}
+
+.auth-one-bg .bg-overlay {
+  background: -o-linear-gradient(left, #4c7ee3, #6691e7);
+  background: -webkit-gradient(
+    linear,
+    left top,
+    right top,
+    from(#4c7ee3),
+    to(#6691e7)
+  );
+  background: linear-gradient(to right, #4c7ee3, #6691e7);
+  opacity: 0.9;
+}
+
+.shape {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  left: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+.shape > svg {
+  width: 100%;
+  height: auto;
+  fill: var(--ig-body-bg);
+}
+
+.auth-pass-inputgroup input[type="text"] + .btn .ri-eye-fill:before {
+  content: "\ecb6";
+}
+
+.signin-other-title {
+  position: relative;
+}
+.signin-other-title:after {
+  content: "";
+  position: absolute;
+  width: 100%;
+  height: 1px;
+  left: 0;
+  right: 0;
+  border-top: 1px dashed var(--ig-border-color);
+  top: 10px;
+}
+.signin-other-title .title {
+  display: inline-block;
+  position: relative;
+  z-index: 9;
+  background-color: var(--ig-card-bg-custom);
+  padding: 2px 16px;
+}
+
+.auth-bg-cover {
+  background: -o-linear-gradient(
+    135deg,
+    var(--ig-primary) 50%,
+    var(--ig-success)
+  );
+  background: -o-linear-gradient(
+    135deg,
+    var(--ig-primary) 50%,
+    var(--ig-success)
+  );
+  background: linear-gradient(-45deg, var(--ig-primary) 50%, var(--ig-success));
+}
+.auth-bg-cover > .bg-overlay {
+  background-position: center;
+  background-size: cover;
+  opacity: 1;
+  background-color: transparent;
+}
+.auth-bg-cover .footer {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+#password-contain {
+  display: none;
+}
+#password-contain p {
+  padding-left: 13px;
+}
+#password-contain p.valid {
+  color: #13c56b;
+}
+#password-contain p.valid::before {
+  position: relative;
+  left: -8px;
+  content: "✔";
+}
+#password-contain p.invalid {
+  color: #ed5e5e;
+}
+#password-contain p.invalid::before {
+  position: relative;
+  left: -8px;
+  content: "✖";
+}
+.dash-filter-picker {
+  min-width: 210px !important;
+}
+
+.form-control {
+  padding: 0.75rem 0.9rem;
+  border-radius: 10px;
+}

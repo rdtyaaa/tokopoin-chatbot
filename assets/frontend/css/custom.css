@@ -1,0 +1,108 @@
+.loader-spinner {
+  -webkit-animation: spin 2s linear infinite !important;
+  animation: spin 2s linear infinite !important;
+}
+
+
+
+.order-confirm {
+  width: 17%;
+}
+
+.courier {
+  width: 40%;
+}
+
+.way {
+  width: 62%;
+}
+.pickup {
+  width: 100%;
+}
+
+.cate-menu-active {
+  color: var(--primary) !important;
+}
+
+.search {
+  position: relative;
+}
+.search input {
+  line-height: 1.8rem;
+  text-indent: 25px;
+  border-radius: 30px;
+}
+.search input:focus {
+  border: 2px solid var(--primary);
+}
+
+.search .fa-search {
+  position: absolute;
+  top: 50%;
+  left: 20px;
+  transform: translateY(-50%);
+  transition: 0.4s ease;
+  color: var(--gray-3);
+}
+.search .fa-search:hover {
+  color: var(--primary);
+  transform: scale(1.05) translateY(-50%);
+}
+
+.search button {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  height: 35px;
+  width: 60px;
+  background: var(--primary);
+}
+
+.newsletter-submit {
+  overflow: inherit !important;
+}
+.input-group-news {
+  position: relative;
+  background-color: var(--primary-light);
+  margin-bottom: 2rem;
+  border-radius: 50px;
+  border: 1px solid var(--primary-light-border);
+}
+.input-group-news input {
+  border: 0.1rem solid transparent;
+  background-color: var(--primary-light);
+  border-radius: 50px;
+  -webkit-border-radius: 50px;
+  width: 100%;
+  padding: 1.5rem 10rem 1.5rem 2rem;
+  box-sizing: border-box;
+  font-size: 1.4rem;
+  background-color: transparent;
+  color: var(--gray-1);
+}
+.input-group-news .input-group-btn {
+  position: absolute;
+  top: 50%;
+  right: 5px;
+  transform: translateY(-50%);
+}
+.input-group-news .input-group-btn .btn {
+  background: var(--primary);
+  color: var(--text-primary);
+  font-size: 1.4rem;
+  min-height: 40px;
+  height: 40px;
+  min-width: 95px;
+  border-radius: 50px;
+  -webkit-border-radius: 50px;
+}
+
+.input-group-news input:focus {
+  outline: none;
+  border-color: var(--primary);
+  transition: border-color 0.2s ease-in-out;
+}
+
+.order-product-details h5 a {
+  color: inherit !important;
+}

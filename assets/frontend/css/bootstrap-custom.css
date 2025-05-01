@@ -1,0 +1,290 @@
+.btn-success {
+  color: var(--white);
+  background-color: rgb(2, 164, 61) !important;
+  border-color: rgb(2, 164, 61);
+}
+.btn-success:hover {
+  background-color: var(--primary);
+  border-color: rgb(2, 164, 61);
+}
+.btn-check:focus + .btn-success,
+.btn-success:focus {
+  color: var(--white);
+  box-shadow: 0 0 0 0.25rem var(--primary-light);
+}
+.btn-check:active + .btn-success,
+.btn-check:checked + .btn-success,
+.btn-success.active,
+.btn-success:active,
+.show > .btn-success.dropdown-toggle {
+  color: var(--white);
+  background-color: var(--primary);
+  border-color: var(--primary);
+}
+.btn-check:focus + .btn-success,
+.btn-success:focus {
+  color: var(--white);
+  background-color: var(--primary);
+  border-color: rgb(2, 164, 61);
+  box-shadow: 0 0 0 0.25rem var(--primary-light);
+}
+.card {
+  border: 0.1rem solid var(--gray-6);
+  border-radius: var(--radius-4);
+  overflow: hidden;
+}
+.card-title {
+  font-size: 1.8rem;
+  color: var(--gray-1);
+  margin-bottom: 0;
+  font-weight: 700;
+}
+.card-header {
+  padding: 1.5rem;
+  margin-bottom: 0;
+  background-color: var(--white);
+  border-bottom: 0.1rem dashed var(--gray-5);
+}
+.card-body {
+  padding: 2rem;
+}
+/* ==============Form Start============== */
+.form-label {
+  margin-bottom: 0.8rem;
+  font-size: 1.4rem;
+  color: var(--gray-1);
+}
+.form-control {
+  display: block;
+  width: 100%;
+  padding: 1.2rem 1.5rem;
+  font-size: 1.4rem;
+  font-weight: 400;
+  color: var(--gray-1);
+  background-color: var(--white);
+  border: 1px solid var(--gray-5);
+  border-radius: var(--radius-4);
+}
+.form-control[type="file"]::file-selector-button {
+  margin-right: 20px;
+  border: none;
+  background: var(--secondary-light);
+  padding: 0.5rem 1.5rem;
+  border-radius: var(--radius-4);
+  color: var(--gray-1);
+  cursor: pointer;
+  transition: background 0.2s ease-in-out;
+}
+.form-select {
+  display: block;
+  width: 100%;
+  padding: 1rem 3.5rem 1rem 1.5rem;
+  font-size: 1.4rem;
+  font-weight: 400;
+  color: var(--gray-1);
+  background-color: var(--white);
+  border: 1px solid var(--gray-4);
+}
+textarea.form-control {
+  resize: none;
+}
+.form-select-sm {
+  padding-top: 0.4rem;
+  padding-bottom: 0.4rem;
+  padding-left: 1rem;
+  font-size: 1.3rem;
+  border-radius: 0.3rem;
+}
+.form-control-sm {
+  min-height: calc(1.2rem + (0.5rem + 2px));
+  padding: 0.4rem 0.5rem;
+  font-size: 1.2rem;
+  border-radius: 0.3rem;
+}
+.form-control:focus,
+.form-select:focus,
+.form-select-sm:focus {
+  color: #212529;
+  background-color: transparent;
+  border-color: var(--primary);
+  outline: 0;
+  box-shadow: 0 0 0 0.25rem var(--primary-light);
+}
+
+.form-check-label {
+  font-size: 1.4rem;
+  color: var(--gray-1);
+}
+.form-check-input {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 0.12rem;
+  border: 0.1rem solid var(--gray-3);
+}
+.form-check-input:focus {
+  border-color: var(--gray-4);
+  outline: 0;
+  box-shadow: 0 0 0 0 var(--primary-light);
+}
+.form-check-input:checked {
+  background-color: var(--primary);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 0.2rem var(--primary-light);
+}
+
+/* ==============Form End============== */
+
+/* ==========Table Start========== */
+tbody,
+td,
+tfoot,
+th,
+thead,
+tr {
+  border: none;
+}
+.table-active {
+  --ig-table-accent-bg: var(--primary-light) !important;
+  background-color: var(--primary-light) !important;
+  color: var(--gray-2);
+}
+.table-hover > tbody > tr:hover {
+  --bs-table-accent-bg: rgb(0 0 0 / 3%);
+  color: var(--bs-table-hover-color);
+}
+/* ==========Table End========== */
+
+/* =====Pagenation Start===== */
+.pagination {
+  border: 0.1rem solid var(--primary) !important;
+  width: -webkit-fit-content;
+  width: -moz-fit-content;
+  width: fit-content;
+  border-radius: var(--radius-4);
+}
+.page-item {
+  border-right: 0.1rem solid var(--gray-5) !important;
+}
+.page-item:last-child {
+  border-right: none !important;
+}
+.pagination .page-link {
+  padding: 0.7rem 1.2rem;
+  font-size: 1.4rem;
+  line-height: 1;
+  color: var(--gray-1) !important;
+}
+.page-link:focus {
+  z-index: 3 !important;
+  color: var(--text-primary) !important;
+  background-color: var(--primary) !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+}
+.page-link:hover {
+  z-index: 2 !important;
+  color: var(--gray-1) !important;
+  background-color: var(--primary-light) !important;
+  border-color: transparent !important;
+}
+.active > .page-link,
+.page-link.active {
+  z-index: 3;
+  color: var(--text-primary) !important;
+  background-color: var(--primary) !important;
+  border-color: transparent !important;
+}
+
+/* =====Pagenation End===== */
+
+.dropdown-item {
+  padding: 0.5rem 1rem;
+}
+.dropdown-item.active,
+.dropdown-item:active {
+  background-color: var(--primary) !important;
+}
+
+/* ==========Modal========== */
+.modal-header {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 2rem;
+  border-bottom: 0.1rem solid var(--gray-6);
+}
+.modal-title {
+  font-size: 1.6rem;
+}
+.modal-body {
+  padding: 2rem;
+}
+.modal-closer {
+  width: 3.2rem;
+  aspect-ratio: 1/1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset rgba(149, 157, 165, 0.2) 0 0.8rem 2.4rem;
+}
+.modal-closer:is(:hover) {
+  background-color: var(--primary);
+  color: var(--white);
+  box-shadow: none;
+  border: none;
+}
+.modal-dialog-scrollable form {
+  overflow-y: auto;
+}
+.modal-footer {
+  padding: 1rem 2rem;
+}
+/* ========Accordion Start======== */
+.accordion-item {
+  border: none;
+}
+.accordion-button::after {
+  display: none;
+}
+.accordion_button_icon {
+  flex-shrink: 0;
+  font-size: 1.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  transition: transform 0.2s ease-in-out;
+}
+.accordion-button:not(.collapsed) .accordion_button_icon {
+  transform: rotate(-180deg);
+  color: var(--primary);
+}
+
+.accordion-body {
+  padding: 1rem 1.25rem;
+  font-size: 1.4rem;
+  line-height: 1.6;
+  border: 0.1rem solid var(--gray-5);
+  border-radius: var(--radius-4);
+  margin-top: 1rem;
+  color: var(--gray-2);
+}
+.border {
+  border: var(--ig-border-width) var(--ig-border-style) var(--gray-5) !important;
+}
+.form-label {
+  margin-bottom: 0.8rem;
+  font-size: 1.2rem;
+  color: var(--gray-1);
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.form-control {
+  border-radius: 10px;
+}
+.page-item:first-child .page-link {
+  border-top-left-radius: var(--bs-pagination-border-radius) !important;
+  border-bottom-left-radius: var(--bs-pagination-border-radius) !important;
+}

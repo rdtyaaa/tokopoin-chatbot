@@ -1,0 +1,32 @@
+ALTER TABLE `orders` ADD `verification_code` MEDIUMTEXT NULL AFTER `uid`;
+ALTER TABLE `orders` ADD `delivery_man_id` BIGINT UNSIGNED NULL AFTER `shipping_deliverie_id`;
+ALTER TABLE `support_tickets` ADD `deliveryman_id` BIGINT UNSIGNED  NULL AFTER `seller_id`;
+ALTER TABLE `transactions` ADD `deliveryman_id` BIGINT UNSIGNED NULL AFTER `user_id`;
+ALTER TABLE `withdraws` ADD `deliveryman_id` BIGINT NULL DEFAULT NULL AFTER `seller_id`;
+/** newly added sql */
+ALTER TABLE `orders` ADD `delivery_man_charge` DOUBLE NOT NULL DEFAULT '0' AFTER `amount`;
+ALTER TABLE `shipping_deliveries` ADD `image` VARCHAR(255) NULL AFTER `id`;
+ALTER TABLE `orders` ADD `address_id` BIGINT UNSIGNED NULL DEFAULT NULL AFTER `order_id`;
+ALTER TABLE `user_addresses` ADD `email` VARCHAR(191) NULL AFTER `name`;
+ALTER TABLE `shipping_deliveries` ADD `free_shipping` ENUM('0','1') NULL DEFAULT NULL AFTER `status`;
+ALTER TABLE `shipping_deliveries` ADD `shipping_type` ENUM("price_wise","weight_wise") NULL AFTER `free_shipping`;
+ALTER TABLE `shipping_deliveries` ADD `price_configuration` LONGTEXT NULL DEFAULT NULL AFTER `price`;
+ALTER TABLE `products` ADD `weight` DOUBLE(20,8) NULL DEFAULT '0' AFTER `is_suggested`;
+ALTER TABLE `products` ADD `shipping_fee` DOUBLE(20,8) NOT NULL DEFAULT '0' AFTER `price`;
+ALTER TABLE `products` ADD `shipping_fee_multiply` TINYINT NULL DEFAULT NULL AFTER `shipping_fee`;
+ALTER TABLE `order_details` ADD `shipping_fee` DOUBLE(20,8) NOT NULL DEFAULT '0' AFTER `total_price`;
+ALTER TABLE `order_details` ADD `tax_amount` LONGTEXT NULL AFTER `shipping_fee`;
+ALTER TABLE `carts` ADD `taxes` LONGTEXT NULL AFTER `quantity`;
+ALTER TABLE `carts` ADD `original_price` DOUBLE(20,8) NOT NULL AFTER `total`;
+ALTER TABLE `carts` ADD `discount` DOUBLE(20,8) NOT NULL DEFAULT '0' AFTER `price`;
+ALTER TABLE `carts` ADD `total_taxes` DOUBLE(20,8) NOT NULL DEFAULT '00' AFTER `discount`;
+ALTER TABLE `orders` ADD `original_amount` DOUBLE(28,8) NOT NULL DEFAULT '0' AFTER `amount`;
+ALTER TABLE `orders` ADD `total_taxes` DOUBLE(28,8) NOT NULL DEFAULT '0' AFTER `original_amount`;
+ALTER TABLE `order_details` ADD `original_price` DOUBLE(28,8) NOT NULL AFTER `shipping_fee`;
+ALTER TABLE `order_details` ADD `taxes` DOUBLE(28,8) NOT NULL DEFAULT '0' AFTER `tax_amount`;
+ALTER TABLE `order_details` ADD `total_taxes` DOUBLE(28,0) NOT NULL DEFAULT '0' AFTER `taxes`;
+ALTER TABLE `order_details` ADD `discount` DOUBLE(28,8) NOT NULL DEFAULT '0' AFTER `total_taxes`;
+/** fcm token configuration */
+ALTER TABLE `users` ADD `fcm_token` LONGTEXT NULL AFTER `uid`;
+ALTER TABLE `sellers` ADD `fcm_token` LONGTEXT NULL DEFAULT NULL AFTER `uid`;
+ALTER TABLE `delivery_men` ADD `fcm_token` LONGTEXT NULL DEFAULT NULL AFTER `country_id`;

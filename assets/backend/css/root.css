@@ -1,0 +1,166 @@
+@charset "UTF-8";
+
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap");
+
+:root {
+  --ig-vertical-menu-bg: #fff;
+  --ig-vertical-menu-item-color: #353639;
+  --ig-vertical-menu-item-hover-color: #9400ff;
+  --ig-vertical-menu-item-active-color: #9400ff;
+  --ig-vertical-menu-sub-item-color: #353639;
+  --ig-vertical-menu-sub-item-hover-color: #9400ff;
+  --ig-vertical-menu-sub-item-active-color: #9400ff;
+  --ig-vertical-menu-title-color: #919da9;
+  --ig-vertical-menu-bg-dark: #0f0d19;
+
+  --ig-vertical-menu-item-color-dark: #a1b7bf;
+  --ig-vertical-menu-item-hover-color-dark: #fff;
+  --ig-vertical-menu-item-active-color-dark: #fff;
+  --ig-vertical-menu-sub-item-color-dark: #a1b7bf;
+  --ig-vertical-menu-sub-item-hover-color-dark: #fff;
+  --ig-vertical-menu-sub-item-active-color-dark: #fff;
+  --ig-vertical-menu-title-color-dark: #ffffff;
+  --ig-header-bg: #fff;
+  --ig-header-item-color: #e9ecef;
+  --ig-header-bg-dark: #38454a;
+  --ig-header-item-color-dark: #9ea9ad;
+  --ig-topbar-search-bg: #f3f3f9;
+  --ig-topbar-user-bg: #f3f3f9;
+  --ig-topbar-user-bg-dark: #455358;
+  --ig-footer-bg: #fff;
+  --ig-footer-color: #98a6ad;
+  --ig-topnav-bg: #fff;
+  --ig-topnav-item-color: #6d7080;
+  --ig-topnav-item-color-active: #9400ff;
+  --ig-twocolumn-menu-iconview-bg: #fff;
+  --ig-twocolumn-menu-bg: #fff;
+  --ig-twocolumn-menu-iconview-bg-dark: var(--ig-vertical-menu-bg-dark);
+  --ig-twocolumn-menu-bg-dark: #3d494e;
+  --ig-twocolumn-menu-item-color-dark: var(--ig-vertical-menu-item-color-dark);
+  --ig-twocolumn-menu-item-active-color-dark: #fff;
+  --ig-twocolumn-menu-item-active-bg-dark: rgba(255, 255, 255, 0.15);
+  --ig-boxed-body-bg: #e5ecf2;
+  --ig-heading-color: #495057;
+  --ig-link-color: #9400ff;
+  --ig-link-hover-color: #9400ff;
+  --ig-border-color: #e9ebec;
+  --ig-card-bg-custom: #fff;
+  --ig-card-logo-dark: block;
+  --ig-card-logo-light: none;
+  --ig-list-group-hover-bg: #f3f6f9;
+  --ig-input-bg: #fff;
+  --ig-input-border: #ced4da;
+  --ig-input-focus-border: #9400ff;
+  --ig-input-disabled-bg: #eff2f7;
+  --ig-input-group-addon-bg: #eff2f7;
+  --ig-input-check-border: var(--ig-input-border);
+
+  --ig-body-color: #252f4a !important;
+}
+/* ================Default css Start================ */
+html {
+  position: relative;
+  min-height: 100%;
+  font-family: "Inter", sans-serif;
+}
+
+.h1,
+.h2,
+.h3,
+.h4,
+.h5,
+.h6,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  color: var(--ig-heading-color);
+  font-family: "Inter", sans-serif !important;
+}
+
+a {
+  text-decoration: none !important;
+}
+
+label {
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+b,
+strong {
+  font-weight: 500;
+}
+
+.blockquote {
+  padding: 10px 20px;
+  border-left: 4px solid var(--ig-gray-300);
+}
+
+.blockquote-reverse {
+  border-left: 0;
+  border-right: 4px solid var(--ig-gray-300);
+  text-align: right;
+}
+
+@media (min-width: 1200px) {
+  .container,
+  .container-lg,
+  .container-md,
+  .container-sm,
+  .container-xl,
+  .container-xxl {
+    max-width: 1140px;
+  }
+}
+.row > * {
+  position: relative;
+}
+:root .nav-tabs {
+  --ig-nav-tabs-link-active-bg: #f3f6f9;
+}
+:root .choices,
+:root .flatpickr-calendar,
+:root .ql-toolbar,
+:root .select2-container,
+:root .menu-dropdown {
+  --ig-choices-bg: #fff;
+  --ig-choices-link-color: #212529;
+  --ig-choices-link-hover-bg: #f3f6f9;
+  --ig-choices-link-active-color: #1e2125;
+}
+
+tbody,
+td,
+tfoot,
+th,
+thead,
+tr {
+  border-style: unset !important;
+}
+
+.table-responsive table tbody tr:not([hidden]) ~ :not([hidden]) {
+  --tw-divide-y-reverse: 0;
+  border-style: dashed !important;
+  border-top-width: calc(1px * (1 - var(--tw-divide-y-reverse))) !important;
+  border-bottom-width: calc(1px * var(--tw-divide-y-reverse)) !important;
+  --tw-divide-opacity: 1;
+  border-color: rgb(226 232 240 / var(--tw-divide-opacity)) !important;
+}
+
+.btn {
+
+    --ig-btn-padding-y: 0.6rem;
+    --ig-btn-line-height: 1.4;
+}
+
+.mb-half{
+  margin-bottom: 0.5rem;
+}
+.rounded-10{
+  border-radius: 10px;
+}
+
+
