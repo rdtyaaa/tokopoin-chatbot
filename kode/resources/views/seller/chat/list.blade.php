@@ -6,7 +6,8 @@
 
 @push('style-push')
     <style>
-        .empty-message img , .empty-list img {
+        .empty-message img,
+        .empty-list img {
             max-width: 20% !important;
             height: auto;
             vertical-align: middle;
@@ -16,21 +17,21 @@
             background-color: #0f0d19;
         }
 
-        .no-products{
+        .no-products {
             display: flex;
             justify-content: center;
             text-align: center;
             flex-direction: column;
             align-items: center;
-            gap:10px;
-            .icon{
-            
-            max-width: 100px;
-            width: 100%;
-            img{
-                width:100%;
+            gap: 10px;
+
+            .icon {
+                max-width: 100px;
+                width: 100%;
+                img {
+                    width: 100%;
+                }
             }
-        }
         }
     </style>
 @endpush
@@ -77,7 +78,6 @@
                                                 <h5>{{ translate('Chat list') }}</h5>
                                             </div>
                                             <div class="session-list">
-
                                                 @forelse ($customers as $customer)
                                                     @php
                                                         $isSeen = true;
@@ -88,10 +88,9 @@
                                                         ) {
                                                             $isSeen = false;
                                                         }
-
                                                     @endphp
 
-                                                    <div class="session-single  get-chat {{ !$isSeen ? 'unread-message' : '' }}  "
+                                                    <div class="session-single get-chat {{ !$isSeen ? 'unread-message' : '' }}"
                                                         id="{{ $customer->id }}">
                                                         <div class="seller-icon">
                                                             <img src="{{ show_image(file_path()['profile']['user']['path'] . '/' . $customer->image, file_path()['profile']['user']['size']) }}"
@@ -119,11 +118,11 @@
                                                         </div>
                                                     </div>
                                                 @empty
-                                                <div class="empty-list">
-                                                    @include('frontend.partials.empty', [
-                                                        'message' => translate('No customer found'),
-                                                    ])
-                                                </div>
+                                                    <div class="empty-list">
+                                                        @include('frontend.partials.empty', [
+                                                            'message' => translate('No customer found'),
+                                                        ])
+                                                    </div>
                                                 @endforelse
                                             </div>
                                         </div>
@@ -135,15 +134,11 @@
                                                     'message' => translate('Please select a Customer'),
                                                 ])
                                             </div>
-
                                         </div>
 
                                         <div class="spinner-border chat-spinner-loader d-none" role="status">
-                                            <span class="visually-hidden">
-
-                                            </span>
+                                            <span class="visually-hidden"></span>
                                         </div>
-
                                     </div>
                                 </div>
                             </div>
@@ -164,17 +159,14 @@
 @push('script-push')
     <script>
         var customerId;
-
-        var userId   = '{{request()->query("user_id")}}';
+        var userId = '{{ request()->query('user_id') }}';
 
         $(document).ready(function() {
-           if(userId){
-             getMessage(userId);
-           }
+            if (userId) {
+                getMessage(userId);
+            }
 
         });
-
-
 
         $(document).on('click', '.get-chat', function(e) {
             $('.get-chat').removeClass('active');
@@ -231,9 +223,7 @@
                 complete: function() {
                     $('.chat-spinner-loader').addClass('d-none')
                 },
-
             });
-
         }
 
 
@@ -272,7 +262,6 @@
                     } else {
                         toaster(response.message, 'danger')
                     }
-
                 },
                 error: function(error) {
                     if (error && error.responseJSON) {
@@ -291,13 +280,10 @@
                         toaster(error.message, 'danger')
                     }
                 },
-
                 complete: function() {
-
                     $('.message-submit').html($btnHtml);
                 },
             })
-
         });
     </script>
 @endpush

@@ -2,7 +2,10 @@
     "name": "laravel/laravel",
     "type": "project",
     "description": "The Laravel Framework.",
-    "keywords": ["framework", "laravel"],
+    "keywords": [
+        "framework",
+        "laravel"
+    ],
     "license": "MIT",
     "require": {
         "php": "^7.3|^8.0",
@@ -23,6 +26,7 @@
         "laravel/tinker": "^2.5",
         "messagebird/php-rest-api": "^3.1",
         "openai-php/client": "^0.6.1",
+        "predis/predis": "^2.4",
         "sendgrid/sendgrid": "~7",
         "spatie/laravel-cookie-consent": "^3.2",
         "textmagic/sdk": "dev-master",
@@ -45,7 +49,7 @@
             "Database\\Factories\\": "database/factories/",
             "Database\\Seeders\\": "database/seeders/"
         },
-        "files":[
+        "files": [
             "app//Http//Helper//helper.php",
             "app//Utilities//constant.php"
         ]
