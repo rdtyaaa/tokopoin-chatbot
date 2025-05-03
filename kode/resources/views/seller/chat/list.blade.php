@@ -28,6 +28,7 @@
             .icon {
                 max-width: 100px;
                 width: 100%;
+
                 img {
                     width: 100%;
                 }
@@ -78,52 +79,7 @@
                                                 <h5>{{ translate('Chat list') }}</h5>
                                             </div>
                                             <div class="session-list">
-                                                @forelse ($customers as $customer)
-                                                    @php
-                                                        $isSeen = true;
-                                                        if (
-                                                            $customer->latestSellerMessage &&
-                                                            $customer->latestSellerMessage->sender_role == 'customer' &&
-                                                            $customer->latestSellerMessage->is_seen == 0
-                                                        ) {
-                                                            $isSeen = false;
-                                                        }
-                                                    @endphp
-
-                                                    <div class="session-single get-chat {{ !$isSeen ? 'unread-message' : '' }}"
-                                                        id="{{ $customer->id }}">
-                                                        <div class="seller-icon">
-                                                            <img src="{{ show_image(file_path()['profile']['user']['path'] . '/' . $customer->image, file_path()['profile']['user']['size']) }}"
-                                                                alt="profile.jpg">
-                                                        </div>
-                                                        <div class="content">
-                                                            <div
-                                                                class="d-flex justify-content-between align-items-center flex-wrap">
-                                                                <div class="title w-auto">
-                                                                    {{ $customer->name . ' ' . $customer->last_name }}
-                                                                </div>
-                                                                <div class="time">
-                                                                    {{ $customer->latestSellerMessage->created_at->diffForHumans() }}
-                                                                </div>
-                                                            </div>
-                                                            <div
-                                                                class="d-flex justify-content-between align-items-center flex-wrap">
-                                                                <p>{{ $customer->latestSellerMessage->message }}</p>
-                                                                @if (!$isSeen)
-                                                                    <span class="message-num">
-                                                                        {{ translate('New') }}
-                                                                    </span>
-                                                                @endif
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                @empty
-                                                    <div class="empty-list">
-                                                        @include('frontend.partials.empty', [
-                                                            'message' => translate('No customer found'),
-                                                        ])
-                                                    </div>
-                                                @endforelse
+                                                @include('seller.chat.sidebar')
                                             </div>
                                         </div>
                                     </div>
@@ -157,25 +113,137 @@
 @endpush
 
 @push('script-push')
+    <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
     <script>
+        // var customerId;
+        // var userId = '{{ request()->query('user_id') }}';
+
         var customerId;
         var userId = '{{ request()->query('user_id') }}';
+        const sellerId = {{ auth()->id() }};
+        const customerIds = {!! json_encode($customers->pluck('id')) !!};
 
+        const socket = io("http://localhost:3000");
+
+        console.log("[INIT] userId (seller):", sellerId);
+        console.log("[INIT] customerIds:", customerIds);
+
+        // Function untuk join WebSocket room
+        function joinRoom(customerId) {
+            const room = `chat-channel.${customerId}.${sellerId}`;
+            console.log(`[SOCKET] Joining room: ${room}`);
+            socket.emit("join", room);
+        }
+
+        // Saat dokumen siap dan ada userId dari query, load pesan & join room
         $(document).ready(function() {
+            console.log("[DOC READY] Page loaded");
             if (userId) {
+                console.log(`[DOC READY] userId found in query: ${userId}, joining room`);
                 getMessage(userId);
+                joinRoom(userId);
+            } else {
+                console.log("[DOC READY] No userId in query");
             }
-
         });
 
+        // Klik customer di sidebar
         $(document).on('click', '.get-chat', function(e) {
             $('.get-chat').removeClass('active');
             $(this).addClass('active');
-            customerId = $(this).attr('id');
-            getMessage(customerId)
 
+            customerId = $(this).attr('id');
+            console.log(`[SIDEBAR CLICK] Clicked customerId: ${customerId}`);
+            getMessage(customerId);
+            joinRoom(customerId);
         });
 
+        // Terima pesan baru
+        socket.on("new-message", function(data) {
+            console.log("[SOCKET] New message received:", data);
+
+            const currentCustomerId = $('.get-chat.active').attr('id');
+            console.log(`[SOCKET] Active customerId: ${currentCustomerId}`);
+
+            if (data.customer_id == currentCustomerId) {
+                console.log(`[SOCKET] Message is for active chat. Refreshing messages...`);
+                getMessage(currentCustomerId, false, null, true, false);
+            } else {
+                console.log(`[SOCKET] Message is for another chat. Refreshing sidebar only.`);
+            }
+
+            refreshChatSidebar();
+        });
+
+        function refreshChatSidebar() {
+            console.log("Refreshing chat sidebar...");
+
+            const activeId = $('.get-chat.active').attr('id'); // Simpan ID yg aktif
+
+            $.ajax({
+                url: `/seller/customer/chat/sidebar`,
+                type: 'GET',
+                success: function(data) {
+                    console.log("Sidebar updated.");
+                    $('.session-list').html(data);
+
+                    // Restore active class setelah sidebar di-refresh
+                    if (activeId) {
+                        const restoredElement = $(`.get-chat#${activeId}`);
+                        if (restoredElement.length) {
+                            restoredElement.addClass('active');
+                            console.log(`Restored active chat to ID: ${activeId}`);
+                        } else {
+                            console.warn(`Active ID ${activeId} not found after refresh.`);
+                        }
+                    }
+                },
+                error: function(xhr) {
+                    console.error("Failed to refresh sidebar:", xhr.responseText);
+                }
+            });
+        }
+
+
+        // // Sidebar refresh
+        // function refreshChatSidebar() {
+        //     console.log("[AJAX] Refreshing chat sidebar...");
+
+        //     $.ajax({
+        //         url: `/seller/customer/chat/sidebar`,
+        //         type: 'GET',
+        //         success: function(data) {
+        //             console.log("[AJAX] Sidebar updated successfully.");
+        //             $('.session-list').html(data);
+        //         },
+        //         error: function(xhr) {
+        //             console.error("[AJAX] Failed to refresh sidebar:", xhr.responseText);
+        //         }
+        //     });
+        // }
+
+        // WebSocket error handling
+        socket.on("connect_error", (err) => {
+            console.error("[SOCKET ERROR] Connection error:", err.message);
+        });
+        socket.on("error", (err) => {
+            console.error("[SOCKET ERROR] General error:", err);
+        });
+
+        // $(document).ready(function() {
+        //     if (userId) {
+        //         getMessage(userId);
+        //     }
+
+        // });
+
+        // $(document).on('click', '.get-chat', function(e) {
+        //     $('.get-chat').removeClass('active');
+        //     $(this).addClass('active');
+        //     customerId = $(this).attr('id');
+        //     getMessage(customerId)
+
+        // });
 
         function getMessage(customerId, loader = true, page = null, scroll = true, append = false) {
 

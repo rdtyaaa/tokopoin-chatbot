@@ -33,7 +33,7 @@ Route::group(['middleware' => ['api.lang','api.currency','sanitizer','maintenanc
 
 
     Route::group(['middleware' => ['auth:sanctum']], function () {
-        
+
         Route::post('logout', [\App\Http\Controllers\Api\Auth\LoginController::class, 'logout']);
         Route::post('add/wishlist', [\App\Http\Controllers\Api\UserController::class, 'wishList']);
         Route::post('delete/wishlist', [\App\Http\Controllers\Api\UserController::class, 'deleteWishlist']);
@@ -78,7 +78,6 @@ Route::group(['middleware' => ['api.lang','api.currency','sanitizer','maintenanc
 
         #SELLER CHAT ROUTE
         Route::controller(SellerChatController::class)->prefix('seller/chat')->group(function(){
-
             Route::get('/list','list');
             Route::get('/messages/{deliveryman_id}','getChat');
             Route::post('/send/message','sendMessage');
@@ -104,10 +103,10 @@ Route::group(['middleware' => ['api.lang','api.currency','sanitizer','maintenanc
         Route::post('reedem/point', [\App\Http\Controllers\Api\UserController::class, 'reedemPoint']);
 
     });
-    
+
     Route::post('checkout', [\App\Http\Controllers\Api\UserController::class, 'orderCheckout'])->middleware(['guest.checkout']);
     Route::post('digital/checkout', [\App\Http\Controllers\Api\UserController::class, 'DigitalOrderCheckout'])->middleware(['guest.checkout']);
-    
+
     Route::post('track/order', [\App\Http\Controllers\Api\UserController::class, 'trackOrder']);
     Route::get('home', [\App\Http\Controllers\Api\HomeController::class, 'index']);
 
@@ -124,7 +123,7 @@ Route::group(['middleware' => ['api.lang','api.currency','sanitizer','maintenanc
     Route::get('payment/log/{trx_code}', [\App\Http\Controllers\Api\HomeController::class, 'getPaymentLog']);
 
     Route::get('products', [\App\Http\Controllers\Api\ProductController::class, 'products']);
-    
+
     /** new api */
     Route::get('shop', [\App\Http\Controllers\Api\HomeController::class, 'shop']);
     Route::get('shop/visit/{id}', [\App\Http\Controllers\Api\HomeController::class, 'shopVisit']);

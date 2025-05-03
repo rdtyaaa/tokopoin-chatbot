@@ -126,7 +126,6 @@ class CustomerChatController extends Controller
             // event(new NewMessageSent($message, $request->input('customer_id')));
             // Log::info('Event dispatched to Redis', ['message' => $request->input('message'), 'receiver_id' => $request->input('customer_id')]);
 
-
             #FIREBASE NOTIFICATIONS
             if ($user && $user->fcm_token) {
                 $payload = (object) [
@@ -142,5 +141,21 @@ class CustomerChatController extends Controller
         } catch (\Exception $ex) {
             return ['status' => false, 'message' => $ex->getMessage()];
         }
+    }
+
+    public function sidebar()
+    {
+        $customerIds = CustomerSellerConversation::with(['customer', 'customer.country'])
+            ->where('seller_id', auth()->id())
+            ->select('customer_id')
+            ->distinct()
+            ->pluck('customer_id')
+            ->toArray();
+
+        $customers = User::with(['country', 'latestSellerMessage'])
+            ->whereIn('id', $customerIds)
+            ->get();
+
+        return view('seller.chat.sidebar', compact('customers'));
     }
 }

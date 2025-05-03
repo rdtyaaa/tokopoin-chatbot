@@ -512,7 +512,7 @@
         })
     </script>
 
-    <script src="{{ mix('js/app.js') }}"></script>
+    {{-- <script src="{{ mix('js/app.js') }}"></script>
     <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
     <script>
         var socket = io('http://localhost:3000'); // Koneksi ke WebSocket Node.js server
@@ -533,7 +533,7 @@
             newMessage.textContent = message.message;
             messageContainer.appendChild(newMessage);
         });
-    </script>
+    </script> --}}
 
 
 </body>

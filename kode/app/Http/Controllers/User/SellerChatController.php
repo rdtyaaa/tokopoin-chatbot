@@ -142,4 +142,19 @@ class SellerChatController extends Controller
             return ['status' => false, 'message' => $ex->getMessage()];
         }
     }
+
+    public function sidebar()
+    {
+        $sellerIds = CustomerSellerConversation::where('customer_id', auth()->id())
+            ->select('seller_id')
+            ->distinct()
+            ->pluck('seller_id')
+            ->toArray();
+
+        $sellers = Seller::with(['latestConversation'])
+            ->whereIn('id', $sellerIds)
+            ->get();
+
+        return view('user.chat.seller.sidebar', compact('sellers'));
+    }
 }

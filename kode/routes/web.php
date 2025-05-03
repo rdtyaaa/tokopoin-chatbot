@@ -54,7 +54,7 @@ use Illuminate\Support\Facades\Cache;
 
 
     Route::get('migrate', function () {
-        
+
         Artisan::call('db:seed',
                     array(
                         '--class' => 'UpdateSeeder',
@@ -65,7 +65,7 @@ use Illuminate\Support\Facades\Cache;
 
 
 
-      
+
     #TEST DHL ROUTE
 
     Route::get(uri: '/dhl/ship', action: function () {
@@ -73,9 +73,9 @@ use Illuminate\Support\Facades\Cache;
 
 
         // #CREATE SHIPPMENT DETAILS
-        
-        // $username = '@@@';  // DHL ACCOUNT USERNAME 
-        // $password = '@@'; // DHL ACCOUNT PASSWORD 
+
+        // $username = '@@@';  // DHL ACCOUNT USERNAME
+        // $password = '@@'; // DHL ACCOUNT PASSWORD
         // $accountNumber = '@@@'; // DHL ACCOUNT NUMBER
 
         // $dhlAPI =  'https://express.api.dhl.com/mydhlapi/test/shipments?strictValidation=false&bypassPLTError=false&validateDataOnly=false'; // TEST API ENDPOINT
@@ -101,7 +101,7 @@ use Illuminate\Support\Facades\Cache;
         //                 'plannedShippingDateAndTime' => date('Y-m-d\TH:i:s \G\M\TP', strtotime('+2 days')),
         //                 'pickup' => ['isRequested' => false],
         //                 'productCode' => 'P',
-                
+
         //                 'accounts' => [
         //                     [
         //                         'typeCode' => 'shipper',
@@ -130,8 +130,8 @@ use Illuminate\Support\Facades\Cache;
         //                             'companyName' => 'Cider BookStore',
         //                             'fullName' => 'LiuWeiMing',
         //                         ],
-                            
-                            
+
+
         //                     ],
         //                     'receiverDetails' => [
         //                         'postalAddress' => [
@@ -147,23 +147,23 @@ use Illuminate\Support\Facades\Cache;
         //                             'companyName' => 'Baylee Marshall',
         //                             'fullName' => 'Baylee Marshall',
         //                         ],
-                            
+
         //                     ],
         //                 ],
         //                 'content' => [
         //                     'packages' => [
         //                         [
-                                
+
         //                             'weight' => 0.5,
         //                             'dimensions' => [
         //                                 'length' => 1,
         //                                 'width' => 1,
         //                                 'height' => 1,
         //                             ],
-                            
+
         //                             'description' => 'Piece content description',
         //                             'labelDescription' => 'bespoke label description',
-                        
+
         //                         ],
         //                     ],
         //                     'isCustomsDeclarable' => true,
@@ -179,7 +179,7 @@ use Illuminate\Support\Facades\Cache;
         //                                     'value' => 4,
         //                                     'unitOfMeasurement' => 'GM',
         //                                 ],
-                                    
+
         //                                 'manufacturerCountry' => 'US',
         //                                 'exportControlClassificationNumber' => 'US123456789',
 
@@ -197,7 +197,7 @@ use Illuminate\Support\Facades\Cache;
         //                                     'netValue' => 0.1,
         //                                     'grossValue' => 0.7,
         //                                 ],
-                                    
+
         //                             ],
         //                             [
         //                                 'number' => 2,
@@ -207,7 +207,7 @@ use Illuminate\Support\Facades\Cache;
         //                                     'value' => 4,
         //                                     'unitOfMeasurement' => 'GM',
         //                                 ],
-                                    
+
         //                                 'manufacturerCountry' => 'US',
         //                                 'exportControlClassificationNumber' => 'US123456789',
 
@@ -225,14 +225,14 @@ use Illuminate\Support\Facades\Cache;
         //                                     'netValue' => 0.1,
         //                                     'grossValue' => 0.7,
         //                                 ],
-                                    
-                                    
+
+
         //                             ],
         //                         ],
         //                         'invoice' => [
         //                             'number' => '2667168671',
         //                             'date' => '2022-10-22',
-                                
+
         //                         ],
         //                         "exportReference"=> "export reference",
         //                         "exportReason"=>  "Test reason",
@@ -243,7 +243,7 @@ use Illuminate\Support\Facades\Cache;
         //                     'incoterm' => 'DAP',
         //                     'description' => 'Piece content description',
 
-                            
+
         //                 ],
 
         //                 'outputImageProperties' => [
@@ -276,7 +276,7 @@ use Illuminate\Support\Facades\Cache;
         //                 ],
         // ];
 
-        // $response = Http::withHeaders( headers: $headers)->post(url:  $dhlAPI , 
+        // $response = Http::withHeaders( headers: $headers)->post(url:  $dhlAPI ,
         //     data: $bodyData
         // );
 
@@ -285,10 +285,10 @@ use Illuminate\Support\Facades\Cache;
 
 
 
-            
+
     });
 
-    
+
 
 
     Route::get('queue-work', function () {
@@ -401,7 +401,7 @@ use Illuminate\Support\Facades\Cache;
                     Route::controller(WithdrawController::class)
                         ->name('withdraw.')
                         ->prefix('withdraw')->group(function(){
-                        
+
                         Route::get('/methods','methods')->name('method');
                         Route::get('/list','list')->name('list');
                         Route::post('/request','request')->name('request');
@@ -413,7 +413,7 @@ use Illuminate\Support\Facades\Cache;
 
 
 
-   
+
                     /**
                      * Wallet deposit route
                      */
@@ -440,6 +440,7 @@ use Illuminate\Support\Facades\Cache;
 
                     #SELLER CHAT ROUTE
                     Route::controller(SellerChatController::class)->prefix('seller/chat')->group(function(){
+                        Route::get('/sidebar','sidebar')->name('seller.chat.sidebar');
                         Route::get('/list','list')->name('seller.chat.list');
                         Route::get('/messages/{seller_id}','getChat')->name('seller.chat.message');
                         Route::post('/send/message','sendMessage')->name('seller.chat.send_message');
@@ -452,7 +453,7 @@ use Illuminate\Support\Facades\Cache;
 
                         Route::get('reward-points',[UserController::class, 'rewardPoints'])->name('reward.points');
                         Route::get('reward-point/show/{id}',[UserController::class, 'rewardPointShow'])->name('reward.point.show');
-                        
+
                         Route::get('redeem-points/{id}',[UserController::class, 'redeemPoint'])->name('redeem.points');
 
                         Route::post('delivery-man/rating', [UserController::class, 'deliveryManRating'])->name("deliveryman.rating");
@@ -523,7 +524,7 @@ use Illuminate\Support\Facades\Cache;
         });
 
 
-        
+
         Route::get('/attribute/value/download/{order_id}/{id}', [CoreController::class, 'attributeValueDownload'])->name('attribute.download');
 
 
@@ -665,7 +666,7 @@ use Illuminate\Support\Facades\Cache;
         });
 
 
-        #Webxpay 
+        #Webxpay
         Route::controller(WebxpayPaymentController::class)->name('webxpay.')->prefix('/webxpay')->group(function () {
             Route::get('/payment/{trx_code?}', 'payment')->name('payment');
             Route::any('payment/callback/{trx_code?}/{type?}','callBack')->name('callback');

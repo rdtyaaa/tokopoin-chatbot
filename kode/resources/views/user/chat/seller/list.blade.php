@@ -63,52 +63,7 @@
                                                 <h5>{{ translate('Chat list') }}</h5>
                                             </div>
                                             <div class="session-list">
-
-                                                @forelse ($sellers as $seller)
-                                                    @php
-                                                        $isSeen = true;
-                                                        if (
-                                                            $seller->latestConversation &&
-                                                            $seller->latestConversation->sender_role == 'seller' &&
-                                                            $seller->latestConversation->is_seen == 0
-                                                        ) {
-                                                            $isSeen = false;
-                                                        }
-
-                                                    @endphp
-
-                                                    <div class="session-single  get-chat {{ !$isSeen ? 'unread-message' : '' }}  "
-                                                        id="{{ $seller->id }}">
-                                                        <div class="seller-icon">
-                                                            <img src="{{ show_image(file_path()['profile']['seller']['path'] . '/' . $seller->image, file_path()['profile']['seller']['size']) }}"
-                                                                alt="profile.jpg">
-                                                        </div>
-                                                        <div class="content">
-                                                            <div
-                                                                class="d-flex justify-content-between align-items-center flex-wrap">
-                                                                <div class="title w-auto">
-                                                                    {{ $seller->name . ' ' . $seller->last_name }}
-                                                                </div>
-                                                                <div class="time">
-                                                                    {{ $seller->latestConversation->created_at->diffForHumans() }}
-                                                                </div>
-                                                            </div>
-                                                            <div
-                                                                class="d-flex justify-content-between align-items-center flex-wrap">
-                                                                <p>{{ $seller->latestConversation->message }}</p>
-                                                                @if (!$isSeen)
-                                                                    <span class="message-num">
-                                                                        {{ translate('New') }}
-                                                                    </span>
-                                                                @endif
-                                                            </div>
-                                                         </div>
-                                                    </div>
-                                                @empty
-                                                    @include('frontend.partials.empty', [
-                                                        'message' => translate('No user found'),
-                                                    ])
-                                                @endforelse
+                                                @include('user.chat.seller.sidebar')
                                             </div>
                                         </div>
                                     </div>
@@ -151,26 +106,93 @@
 @endpush
 
 @push('scriptpush')
+    <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
     <script>
-        var sellerId   = '{{request()->query("seller_id")}}';
-        var productId  = '{{request()->query("product_id")}}';
+        var sellerId = '{{ request()->query('seller_id') }}';
+        var productId = '{{ request()->query('product_id') }}';
+        const customerId = {{ auth()->id() }};
+        const sellerIds = {!! json_encode($sellers->pluck('id')) !!};
 
+        const socket = io("http://localhost:3000"); // sesuaikan jika berbeda
+
+        // Function untuk join WebSocket room
+        function joinRoom(sellerId) {
+            const room = `chat-channel.${customerId}.${sellerId}`;
+            console.log("Joining room:", room);
+            socket.emit("join", room);
+        }
+
+        // Saat dokumen siap dan ada sellerId dari query, load pesan & join room
         $(document).ready(function() {
-           if(sellerId){
-             getMessage(sellerId);
-           }
-
+            if (sellerId) {
+                getMessage(sellerId);
+                joinRoom(sellerId);
+            }
         });
 
-
+        // Klik di daftar seller → aktifkan, ambil pesan, join room
         $(document).on('click', '.get-chat', function(e) {
             $('.get-chat').removeClass('active');
             $(this).addClass('active');
-            sellerId = $(this).attr('id');
-            getMessage(sellerId)
 
+            sellerId = $(this).attr('id');
+            getMessage(sellerId);
+            joinRoom(sellerId);
         });
 
+        // Terima pesan baru dari WebSocket
+        socket.on("new-message", function(data) {
+            console.log("New message received:", data);
+
+            const currentSellerId = $('.get-chat.active').attr('id');
+            if (data.seller_id == currentSellerId) {
+                console.log("Refreshing messages for seller:", currentSellerId);
+                getMessage(currentSellerId, false, null, true, false);
+            } else {
+                console.log("Not active chat, still refreshing sidebar...");
+            }
+
+            refreshChatSidebar();
+        });
+
+        // Sidebar refresh: ganti isi session-list
+        function refreshChatSidebar() {
+            console.log("Refreshing chat sidebar...");
+
+            const activeId = $('.get-chat.active').attr('id'); // Simpan ID yg aktif
+
+            $.ajax({
+                url: `/user/seller/chat/sidebar`,
+                type: 'GET',
+                success: function(data) {
+                    console.log("Sidebar updated.");
+                    $('.session-list').html(data);
+
+                    // Restore active class setelah sidebar di-refresh
+                    if (activeId) {
+                        const restoredElement = $(`.get-chat#${activeId}`);
+                        if (restoredElement.length) {
+                            restoredElement.addClass('active');
+                            console.log(`Restored active chat to ID: ${activeId}`);
+                        } else {
+                            console.warn(`Active ID ${activeId} not found after refresh.`);
+                        }
+                    }
+                },
+                error: function(xhr) {
+                    console.error("Failed to refresh sidebar:", xhr.responseText);
+                }
+            });
+        }
+
+
+        // Error handler WebSocket
+        socket.on("connect_error", (err) => {
+            console.error("WebSocket connection error:", err.message);
+        });
+        socket.on("error", (err) => {
+            console.error("WebSocket general error:", err);
+        });
 
         function getMessage(sellerId, loader = true, page = null, scroll = true, append = false) {
 
@@ -193,17 +215,16 @@
                 success: function(response) {
                     $('.chat-message').html(response.chat);
 
-                    if('{{$product_url}}'){
-                       var counter  =  $('#ajaxRequestCounter').val();
-                       var chatMessage = $('.chat-message-input');
-                       if(counter == 0){
-                           chatMessage.html('{{$product_url}}');
-                       }
-                       else{
-                           chatMessage.html('')
-                       }
+                    if ('{{ $product_url }}') {
+                        var counter = $('#ajaxRequestCounter').val();
+                        var chatMessage = $('.chat-message-input');
+                        if (counter == 0) {
+                            chatMessage.html('{{ $product_url }}');
+                        } else {
+                            chatMessage.html('')
+                        }
 
-                       $('#ajaxRequestCounter').val(counter+1);
+                        $('#ajaxRequestCounter').val(counter + 1);
                     }
 
                     if (scroll) {

@@ -66,10 +66,11 @@ Route::middleware($globalMiddleware)->group(function(){
 
             #SELLER CHAT ROUTE
             Route::controller(CustomerChatController::class)->prefix('customer/chat')->group(function(){
+                Route::get('/sidebar','sidebar')->name('customer.chat.sidebar');
                 Route::get('/list','list')->name('customer.chat.list');
                 Route::get('/messages/{customer_id}','getChat')->name('customer.chat.message');
                 Route::post('/send/message','sendMessage')->name('customer.chat.send_message');
-            }); 
+            });
 
             //Transaction Log
             Route::get('transaction/log', [HomeController::class, 'transaction'])->name('transaction.history');
@@ -129,7 +130,7 @@ Route::middleware($globalMiddleware)->group(function(){
             Route::post('digital/product/attribute/store', [DigitalProductController::class, 'attributeStore'])->name('digital.product.attribute.store');
             Route::get('digital/product/attribute/edit/{id}', [DigitalProductController::class, 'attributeEdit'])->name('digital.product.attribute.edit');
 
-            
+
             Route::post('digital/product/attribute/value/store/{id}', [DigitalProductController::class, 'attributeValueStore'])->name('digital.product.attribute.value.store');
 
             Route::post('digital/product/attribute/value/update', [DigitalProductController::class, 'attributeValueUpdate'])->name('digital.product.attribute.value.update');
@@ -215,7 +216,7 @@ Route::middleware($globalMiddleware)->group(function(){
         });
 
 
-        #DEPOSIT ROUTE 
+        #DEPOSIT ROUTE
 
         Route::get('/deposit/success/{trx_number}', [DepositController::class, 'paymentSuccess'])->name('payment.success');
         Route::get('/deposit/failed/{trx_number}', [DepositController::class, 'paymentFailed'])->name('payment.failed');
