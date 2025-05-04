@@ -114,6 +114,7 @@
 
 @push('script-push')
     <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
     <script>
         // var customerId;
         // var userId = '{{ request()->query('user_id') }}';
@@ -135,6 +136,14 @@
             socket.emit("join", room);
         }
 
+        try {
+            customerIds.forEach(cId => {
+                joinRoom(cId);
+            });
+        } catch (e) {
+            console.error("Error emitting join events:", e);
+        }
+
         // Saat dokumen siap dan ada userId dari query, load pesan & join room
         $(document).ready(function() {
             console.log("[DOC READY] Page loaded");
@@ -152,10 +161,11 @@
             $('.get-chat').removeClass('active');
             $(this).addClass('active');
 
+            $(this).find('.message-num').remove();
+
             customerId = $(this).attr('id');
             console.log(`[SIDEBAR CLICK] Clicked customerId: ${customerId}`);
             getMessage(customerId);
-            joinRoom(customerId);
         });
 
         // Terima pesan baru
@@ -165,14 +175,58 @@
             const currentCustomerId = $('.get-chat.active').attr('id');
             console.log(`[SOCKET] Active customerId: ${currentCustomerId}`);
 
+
             if (data.customer_id == currentCustomerId) {
-                console.log(`[SOCKET] Message is for active chat. Refreshing messages...`);
                 getMessage(currentCustomerId, false, null, true, false);
+
+                const $item = $(`#${data.seller_id}`);
+
+                // Update pesan preview
+                $item.find('p').text(data.message.message);
+                console.log("data message: ", data.message.message);
+
+                // Update waktu
+                $item.find('.time').text(moment(data.message.created_at).fromNow());
+
+
+                // Tambah badge 'New' jika belum dibaca (bisa berdasarkan data.is_seen = false)
+                // if (!data.is_seen) {
+                //     if ($item.find('.message-num').length === 0) {
+                //         $item.find('.d-flex.justify-content-between.align-items-center.flex-wrap')
+                //             .last()
+                //             .append(`<span class="message-num">New</span>`);
+                //     }
+                // } else {
+                //     $item.find('.message-num').remove();
+                // }
             } else {
-                console.log(`[SOCKET] Message is for another chat. Refreshing sidebar only.`);
+                const $item = $(`#${data.seller_id}`);
+                console.log("rubah customer ini: ", $item);
+
+
+                // Tambahkan badge dan update preview
+                $item.find('p').text(data.message.message);
+                $item.find('.time').text(moment(data.message.created_at).fromNow());
+
+                if ($item.find('.message-num').length === 0) {
+                    $item.find('.d-flex.justify-content-between.align-items-center.flex-wrap')
+                        .last()
+                        .append(`<span class="message-num">New</span>`);
+                }
+
+                // Tambahkan highlight class
+                $item.addClass('unread-message');
             }
 
-            refreshChatSidebar();
+
+            // if (data.customer_id == currentCustomerId) {
+            //     console.log(`[SOCKET] Message is for active chat. Refreshing messages...`);
+            //     getMessage(currentCustomerId, false, null, true, false);
+            // } else {
+            //     console.log(`[SOCKET] Message is for another chat. Refreshing sidebar only.`);
+            // }
+
+            // refreshChatSidebar();
         });
 
         function refreshChatSidebar() {

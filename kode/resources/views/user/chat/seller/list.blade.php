@@ -107,6 +107,7 @@
 
 @push('scriptpush')
     <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
     <script>
         var sellerId = '{{ request()->query('seller_id') }}';
         var productId = '{{ request()->query('product_id') }}';
@@ -122,6 +123,15 @@
             socket.emit("join", room);
         }
 
+        // Join semua room seller yang pernah chat
+        try {
+            sellerIds.forEach(sId => {
+                joinRoom(sId);
+            });
+        } catch (e) {
+            console.error("Error emitting join events:", e);
+        }
+
         // Saat dokumen siap dan ada sellerId dari query, load pesan & join room
         $(document).ready(function() {
             if (sellerId) {
@@ -135,9 +145,10 @@
             $('.get-chat').removeClass('active');
             $(this).addClass('active');
 
+            $(this).find('.message-num').remove();
+
             sellerId = $(this).attr('id');
             getMessage(sellerId);
-            joinRoom(sellerId);
         });
 
         // Terima pesan baru dari WebSocket
@@ -145,14 +156,35 @@
             console.log("New message received:", data);
 
             const currentSellerId = $('.get-chat.active').attr('id');
-            if (data.seller_id == currentSellerId) {
-                console.log("Refreshing messages for seller:", currentSellerId);
-                getMessage(currentSellerId, false, null, true, false);
-            } else {
-                console.log("Not active chat, still refreshing sidebar...");
-            }
+            console.log("Current Seller Id:", currentSellerId);
 
-            refreshChatSidebar();
+            if (data.seller_id == currentSellerId) {
+                getMessage(currentSellerId, false, null, true, false);
+
+                const $item = $(`#${data.customer_id}`);
+
+                // Update pesan preview
+                $item.find('p').text(data.message.message);
+
+                // Update waktu
+                $item.find('.time').text(moment(data.message.created_at).fromNow());
+
+            } else {
+                const $item = $(`#${data.customer_id}`);
+
+                // Tambahkan badge dan update preview
+                $item.find('p').text(data.message.message);
+                $item.find('.time').text(moment(data.message.created_at).fromNow());
+
+                if ($item.find('.message-num').length === 0) {
+                    $item.find('.d-flex.justify-content-between.align-items-center.flex-wrap')
+                        .last()
+                        .append(`<span class="message-num">New</span>`);
+                }
+
+                // Tambahkan highlight class
+                $item.addClass('unread-message');
+            }
         });
 
         // Sidebar refresh: ganti isi session-list
