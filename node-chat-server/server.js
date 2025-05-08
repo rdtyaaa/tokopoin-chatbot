@@ -44,16 +44,37 @@ redis.on("pmessage", (pattern, channel, message) => {
 });
 
 // WebSocket connection handling
+// io.on("connection", (socket) => {
+//   console.log("A user connected");
+
+//   socket.on("join", (room) => {
+//     socket.join(room);
+//     console.log("User joined room:", room);
+//   });
+
+//   socket.on("disconnect", () => {
+//     console.log("A user disconnected");
+//   });
+// });
+
 io.on("connection", (socket) => {
-  console.log("A user connected");
+  const userId = socket.handshake.query.user_id;
 
-  socket.on("join", (room) => {
-    socket.join(room);
-    console.log("User joined room:", room);
-  });
+  if (userId) {
+    redis.sadd("online_users", userId);
+    console.log(`User ${userId} connected`);
 
-  socket.on("disconnect", () => {
-    console.log("A user disconnected");
+    // Emit event ke semua klien tentang user online
+    io.emit("user-online-status", { user_id: userId, online: true });
+  }
+
+  socket.on("disconnect", async () => {
+    if (userId) {
+      await redis.srem("online_users", userId);
+      console.log(`User ${userId} disconnected`);
+
+      io.emit("user-online-status", { user_id: userId, online: false });
+    }
   });
 });
 

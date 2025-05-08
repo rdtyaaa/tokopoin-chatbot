@@ -38,7 +38,7 @@ class Category extends Model
 
 
 
-    
+
 
     public function scopeParentCategory($query)
     {
@@ -114,21 +114,21 @@ class Category extends Model
             $category->uid = str_unique();
         });
 
-        
+
         static::updated(function (Model $model) {
-            
+
             Cache::forget(CacheKey::TOP_CATEGORIES->value);
             Cache::forget(CacheKey::FRONTEND_CATEGORIES->value);
             Cache::forget(CacheKey::ALL_CATEGORIES->value);
         });
         static::saved(function (Model $model) {
-            
+
             Cache::forget(CacheKey::TOP_CATEGORIES->value);
             Cache::forget(CacheKey::FRONTEND_CATEGORIES->value);
             Cache::forget(CacheKey::ALL_CATEGORIES->value);
         });
         static::deleted(function (Model $model) {
-            
+
             Cache::forget(CacheKey::TOP_CATEGORIES->value);
             Cache::forget(CacheKey::FRONTEND_CATEGORIES->value);
             Cache::forget(CacheKey::ALL_CATEGORIES->value);

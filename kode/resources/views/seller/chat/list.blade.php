@@ -121,7 +121,7 @@
 
         var customerId;
         var userId = '{{ request()->query('user_id') }}';
-        const sellerId = {{ auth()->id() }};
+        const sellerId = {{ auth('seller')->user()->id }};
         const customerIds = {!! json_encode($customers->pluck('id')) !!};
 
         const socket = io("http://localhost:3000");
@@ -131,7 +131,7 @@
 
         // Function untuk join WebSocket room
         function joinRoom(customerId) {
-            const room = `chat-channel.${customerId}.${sellerId}`;
+            const room = `chat-channel.${sellerId}.${customerId}`;
             console.log(`[SOCKET] Joining room: ${room}`);
             socket.emit("join", room);
         }
@@ -150,7 +150,7 @@
             if (userId) {
                 console.log(`[DOC READY] userId found in query: ${userId}, joining room`);
                 getMessage(userId);
-                joinRoom(userId);
+                // joinRoom(userId);
             } else {
                 console.log("[DOC READY] No userId in query");
             }
@@ -179,7 +179,7 @@
             if (data.customer_id == currentCustomerId) {
                 getMessage(currentCustomerId, false, null, true, false);
 
-                const $item = $(`#${data.seller_id}`);
+                const $item = $(`#${data.customer_id}`);
 
                 // Update pesan preview
                 $item.find('p').text(data.message.message);
@@ -200,7 +200,7 @@
                 //     $item.find('.message-num').remove();
                 // }
             } else {
-                const $item = $(`#${data.seller_id}`);
+                const $item = $(`#${data.customer_id}`);
                 console.log("rubah customer ini: ", $item);
 
 

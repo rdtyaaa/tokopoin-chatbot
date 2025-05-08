@@ -118,7 +118,7 @@
 
         // Function untuk join WebSocket room
         function joinRoom(sellerId) {
-            const room = `chat-channel.${customerId}.${sellerId}`;
+            const room = `chat-channel.${sellerId}.${customerId}`;
             console.log("Joining room:", room);
             socket.emit("join", room);
         }
@@ -135,8 +135,9 @@
         // Saat dokumen siap dan ada sellerId dari query, load pesan & join room
         $(document).ready(function() {
             if (sellerId) {
+                console.log(`[DOC READY] sellerId found in query: ${sellerId}, joining room`);
                 getMessage(sellerId);
-                joinRoom(sellerId);
+                // joinRoom(sellerId);
             }
         });
 
@@ -161,7 +162,7 @@
             if (data.seller_id == currentSellerId) {
                 getMessage(currentSellerId, false, null, true, false);
 
-                const $item = $(`#${data.customer_id}`);
+                const $item = $(`#${data.seller_id}`);
 
                 // Update pesan preview
                 $item.find('p').text(data.message.message);
@@ -170,7 +171,7 @@
                 $item.find('.time').text(moment(data.message.created_at).fromNow());
 
             } else {
-                const $item = $(`#${data.customer_id}`);
+                const $item = $(`#${data.seller_id}`);
 
                 // Tambahkan badge dan update preview
                 $item.find('p').text(data.message.message);

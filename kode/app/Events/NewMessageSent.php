@@ -18,7 +18,7 @@ class NewMessageSent implements ShouldBroadcast
     public $sellerId;
     public $customerId;
 
-    public function __construct(CustomerSellerConversation $message, $sellerId, $customerId)
+    public function __construct(CustomerSellerConversation $message, $customerId, $sellerId)
     {
         $this->message = $message;
         $this->sellerId = (int) $sellerId;

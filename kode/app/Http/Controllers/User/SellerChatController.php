@@ -68,7 +68,7 @@ class SellerChatController extends Controller
             ->where('seller_id', $seller_id)
             ->where('customer_id', $this->user->id)
             ->where('sender_role', 'seller')
-            ->lazyById(100, 'id')
+            ->lazyById(6, 'id')
             ->each->update([
                 'is_seen' => 1,
             ]);

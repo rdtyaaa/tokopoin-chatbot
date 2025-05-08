@@ -40,6 +40,7 @@ class CustomerChatController extends Controller
 
     public function list()
     {
+        
         $customerIds = CustomerSellerConversation::with(['customer', 'customer.country'])
             ->where('seller_id', $this->seller->id)
             ->select('customer_id')
@@ -70,7 +71,7 @@ class CustomerChatController extends Controller
             ->where('customer_id', $customer_id)
             ->where('seller_id', $this->seller->id)
             ->where('sender_role', 'customer')
-            ->lazyById(100, 'id')
+            ->lazyById(6, 'id')
             ->each->update([
                 'is_seen' => 1,
             ]);

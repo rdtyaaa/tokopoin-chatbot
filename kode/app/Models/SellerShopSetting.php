@@ -22,6 +22,7 @@ class SellerShopSetting extends Model
         'shop_second_image',
         'shop_third_image',
         'seller_site_logo',
+        'status',
         'uid'
     ];
 

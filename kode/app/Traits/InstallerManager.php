@@ -363,18 +363,18 @@ trait InstallerManager
 
      }
 
-     private function _dbMigrate(bool $forceImport = false) :void{
+        private function _dbMigrate(bool $forceImport = false) :void{
 
-         if($forceImport){
-             Artisan::call('db:wipe', ['--force' => true]);
-         }
-         $sqlFile = resource_path('database/database.sql');
-         DB::unprepared(file_get_contents($sqlFile));
-     }
-     private function _dbSeed() :void{
+            if($forceImport){
+                Artisan::call('db:wipe', ['--force' => true]);
+            }
+            $sqlFile = resource_path('database/database.sql');
+            DB::unprepared(file_get_contents($sqlFile));
+        }
+        private function _dbSeed() :void{
 
-         Artisan::call('db:seed', ['--force' => true]);
-     }
+            Artisan::call('db:seed', ['--force' => true]);
+        }
 
 
      private function _systemInstalled(string $purchaseKey = null ,string $envatoUsername = null ) :void {
