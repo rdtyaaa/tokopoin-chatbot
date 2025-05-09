@@ -17,14 +17,14 @@ const io = socketIo(server, {
   },
 });
 
-// Setup Redis client
-const redis = new Redis({
-  host: "127.0.0.1",
-  port: 6379,
-});
+// Redis client untuk SUBSCRIBE
+const subscriber = new Redis({ host: "127.0.0.1", port: 6379 });
+
+// Redis client untuk COMMAND
+const publisher = new Redis({ host: "127.0.0.1", port: 6379 });
 
 // Subscribe to channels from Laravel (match the pattern)
-redis.psubscribe("chat-channel.*.*", (err, count) => {
+subscriber.psubscribe("chat-channel.*.*", (err, count) => {
   if (err) {
     console.error("Failed to psubscribe:", err.message);
   } else {
@@ -33,7 +33,7 @@ redis.psubscribe("chat-channel.*.*", (err, count) => {
 });
 
 // Listen to Redis messages and forward them to WebSocket clients
-redis.on("pmessage", (pattern, channel, message) => {
+subscriber.on("pmessage", (pattern, channel, message) => {
   const parsed = JSON.parse(message);
   const payload = parsed.data;
 
@@ -43,38 +43,57 @@ redis.on("pmessage", (pattern, channel, message) => {
   io.to(room).emit("new-message", payload);
 });
 
-// WebSocket connection handling
-// io.on("connection", (socket) => {
-//   console.log("A user connected");
+const axios = require("axios");
 
-//   socket.on("join", (room) => {
-//     socket.join(room);
-//     console.log("User joined room:", room);
-//   });
-
-//   socket.on("disconnect", () => {
-//     console.log("A user disconnected");
-//   });
-// });
-
-io.on("connection", (socket) => {
-  const userId = socket.handshake.query.user_id;
-
-  if (userId) {
-    redis.sadd("online_users", userId);
-    console.log(`User ${userId} connected`);
-
-    // Emit event ke semua klien tentang user online
-    io.emit("user-online-status", { user_id: userId, online: true });
+async function saveLastSeenToDB(userId, role, timestamp) {
+  try {
+    await axios.post("http://localhost:8000/api/save-last-seen", {
+      user_id: userId,
+      role: role,
+      last_seen: timestamp,
+    });
+  } catch (error) {
+    console.error(
+      "Failed to save last seen:",
+      error.response?.data || error.message
+    );
   }
+}
 
+// Socket.io connection
+io.on("connection", async (socket) => {
+  const role = socket.handshake.query.role;
+  const userId = socket.handshake.query.user_id;
+  const globalUserId = `${role}-${userId}`;
+
+  // Tambahkan user ke Redis Set online
+  await publisher.sadd("online_users", globalUserId);
+
+  // Emit status online user ini ke semua client
+  io.emit("user-online-status", { user_id: globalUserId, online: true });
+
+  // Ambil semua user yang online dari Redis dan kirim ke client yang baru konek
+  const allOnline = await publisher.smembers("online_users");
+  console.log("Emitting all-users-online with:", allOnline);
+  socket.emit("all-users-online", allOnline);
+
+  // Tangani join ke room chat
+  socket.on("join", (room) => {
+    socket.join(room);
+    console.log(`User ${globalUserId} joined room ${room}`);
+  });
+
+  socket.on("request-online-users", async () => {
+    const onlineUsers = await publisher.smembers("online_users");
+    socket.emit("all-users-online", onlineUsers);
+  });
+
+  // Tangani disconnect
   socket.on("disconnect", async () => {
-    if (userId) {
-      await redis.srem("online_users", userId);
-      console.log(`User ${userId} disconnected`);
-
-      io.emit("user-online-status", { user_id: userId, online: false });
-    }
+    await publisher.srem("online_users", globalUserId);
+    await saveLastSeenToDB(userId, role, new Date());
+    console.log("All online users:", allOnline);
+    io.emit("user-online-status", { user_id: globalUserId, online: false });
   });
 });
 

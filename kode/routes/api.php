@@ -1,11 +1,12 @@
 <?php
 
-use App\Http\Controllers\Api\DeliverymanChatController;
-use App\Http\Controllers\Api\DepositController;
-use App\Http\Controllers\Api\SellerChatController;
-use App\Http\Controllers\Api\WithdrawController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\DepositController;
+use App\Http\Controllers\Api\PresenceController;
+use App\Http\Controllers\Api\WithdrawController;
+use App\Http\Controllers\Api\SellerChatController;
+use App\Http\Controllers\Api\DeliverymanChatController;
 
 /*
 |--------------------------------------------------------------------------
@@ -25,6 +26,8 @@ Route::group(['middleware' => ['api.lang','api.currency','sanitizer','maintenanc
     Route::post('register', [\App\Http\Controllers\Api\Auth\RegisterController::class, 'register']);
     Route::post('login', [\App\Http\Controllers\Api\Auth\LoginController::class, 'login']);
     Route::post('verify-otp', [\App\Http\Controllers\Api\Auth\LoginController::class, 'verifyOTP']);
+    Route::post('/save-last-seen', [PresenceController::class, 'saveLastSeen']);
+    Route::get('/user-last-seen', [PresenceController::class, 'getLastSeen']);
 
     #PASSWORD RESET ROUTE
     Route::post('forgot-password', [\App\Http\Controllers\Api\Auth\PasswordResetController::class, 'store']);

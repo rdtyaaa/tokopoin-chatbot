@@ -30,6 +30,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'billing_address',
         'uid',
         'balance',
+        'last_seen'
     ];
 
     /**
@@ -125,7 +126,7 @@ class User extends Authenticatable implements MustVerifyEmail
 
 
 
-  
+
     public function rewards() {
         return $this->hasMany(RewardPointLog::class,'user_id','id');
     }

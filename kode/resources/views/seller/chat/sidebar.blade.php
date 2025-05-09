@@ -16,6 +16,10 @@
                 alt="profile.jpg">
         </div>
         <div class="content">
+            <div class="online-status" data-role="customer" data-id="{{ $customer->id }}">
+                <span class="status-dot"></span> <!-- dot bulat -->
+                <span class="status-text">Loading...</span>
+            </div>
             <div class="d-flex justify-content-between align-items-center flex-wrap">
                 <div class="title w-auto">
                     {{ $customer->name . ' ' . $customer->last_name }}

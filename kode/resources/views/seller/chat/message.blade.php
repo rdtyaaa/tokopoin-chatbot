@@ -8,6 +8,9 @@
                         alt="profile.jpg">
                 </div>
                 <h5>{{ $user->name . ' ' . $user->last_name }}</h5>
+                <div class="user-status" data-role="customer" data-id={{ $user->id }}>
+                    <span class="status-text">Loading...</span>
+                </div>
             </div>
         </div>
 

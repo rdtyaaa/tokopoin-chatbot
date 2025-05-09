@@ -23,7 +23,8 @@ class Seller extends Authenticatable
         'balance',
         'image',
         'address',
-        'uid'
+        'uid',
+        'last_seen'
     ];
 
     protected static function booted()

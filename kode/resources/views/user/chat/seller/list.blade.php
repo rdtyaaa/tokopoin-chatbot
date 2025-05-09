@@ -2,6 +2,26 @@
 @push('stylepush')
     <link href="{{ asset('assets/global/css/chat.css') }}" rel="stylesheet" type="text/css" />
     <link href="{{ asset('assets/frontend/css/bootstrap-icons.min.css') }}" rel="stylesheet" type="text/css" />
+
+    <style>
+        .status-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 5px;
+            background-color: gray;
+            /* default */
+        }
+
+        .status-online .status-dot {
+            background-color: #28a745;
+        }
+
+        .status-offline .status-dot {
+            background-color: #ccc;
+        }
+    </style>
 @endpush
 
 @section('content')
@@ -109,12 +129,35 @@
     <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
     <script>
+        var userRole = "customer";
         var sellerId = '{{ request()->query('seller_id') }}';
         var productId = '{{ request()->query('product_id') }}';
         const customerId = {{ auth()->id() }};
         const sellerIds = {!! json_encode($sellers->pluck('id')) !!};
 
-        const socket = io("http://localhost:3000"); // sesuaikan jika berbeda
+        const socket = io("http://localhost:3000", {
+            query: {
+                role: userRole,
+                user_id: customerId
+            }
+        });
+
+        socket.on("connect", () => {
+            console.log("Connected to WebSocket as", userRole + '-' + customerId);
+        });
+
+        socket.on("user-online-status", function(data) {
+            console.log("[user-online-status] Event received:", data);
+            const [role, id] = data.user_id.split("-");
+            const selectors =
+                `.online-status[data-role="${role}"][data-id="${id}"], .user-status[data-role="${role}"][data-id="${id}"]`;
+
+            const $targets = $(selectors);
+            $targets.each(function() {
+                updateStatusElement($(this), data.online, data.last_seen);
+            });
+        });
+
 
         // Function untuk join WebSocket room
         function joinRoom(sellerId) {
@@ -139,6 +182,12 @@
                 getMessage(sellerId);
                 // joinRoom(sellerId);
             }
+            // Terima status online user lain (misalnya untuk update badge)
+            socket.on("all-users-online", function(userIds) {
+                console.log("[all-users-online] Event received:", userIds);
+                checkOnlineStatus(userIds);
+            });
+
         });
 
         // Klik di daftar seller → aktifkan, ambil pesan, join room
@@ -149,7 +198,8 @@
             $(this).find('.message-num').remove();
 
             sellerId = $(this).attr('id');
-            getMessage(sellerId);
+            getMessage(sellerId, false, null, true, false);
+
         });
 
         // Terima pesan baru dari WebSocket
@@ -161,6 +211,7 @@
 
             if (data.seller_id == currentSellerId) {
                 getMessage(currentSellerId, false, null, true, false);
+
 
                 const $item = $(`#${data.seller_id}`);
 
@@ -188,36 +239,50 @@
             }
         });
 
-        // Sidebar refresh: ganti isi session-list
-        function refreshChatSidebar() {
-            console.log("Refreshing chat sidebar...");
+        function checkOnlineStatus(userIds) {
+            const onlineSet = new Set(userIds);
 
-            const activeId = $('.get-chat.active').attr('id'); // Simpan ID yg aktif
+            $(".online-status, .user-status").each(function() {
+                const role = $(this).data("role");
+                const id = $(this).data("id");
+                const globalUserId = `${role}-${id}`;
 
-            $.ajax({
-                url: `/user/seller/chat/sidebar`,
-                type: 'GET',
-                success: function(data) {
-                    console.log("Sidebar updated.");
-                    $('.session-list').html(data);
-
-                    // Restore active class setelah sidebar di-refresh
-                    if (activeId) {
-                        const restoredElement = $(`.get-chat#${activeId}`);
-                        if (restoredElement.length) {
-                            restoredElement.addClass('active');
-                            console.log(`Restored active chat to ID: ${activeId}`);
-                        } else {
-                            console.warn(`Active ID ${activeId} not found after refresh.`);
-                        }
-                    }
-                },
-                error: function(xhr) {
-                    console.error("Failed to refresh sidebar:", xhr.responseText);
+                if (onlineSet.has(globalUserId)) {
+                    updateStatusElement($(this), true);
+                } else {
+                    $.get(`/api/user-last-seen?role=${role}&id=${id}`, (res) => {
+                        updateStatusElement($(this), false, res.last_seen);
+                    });
                 }
             });
         }
 
+        function updateStatusElement($el, isOnline, lastSeen = null) {
+            const $text = $el.find(".status-text");
+            const $dot = $el.find(".status-dot");
+
+            if (isOnline) {
+                $text.text("Online");
+                $el.removeClass("status-offline").addClass("status-online");
+            } else {
+                $text.text(timeAgo(lastSeen));
+                $el.removeClass("status-online").addClass("status-offline");
+            }
+        }
+
+        function timeAgo(date) {
+            console.log("Raw date:", date, "Parsed:", moment.utc(date).local().format());
+            if (!date) return "Baru saja aktif";
+
+            const localTime = moment.utc(date).local();
+            if (!localTime.isValid()) return "Waktu tidak valid";
+
+            const diffMin = moment().diff(localTime, 'minutes');
+
+            if (diffMin < 1) return "Baru saja aktif";
+            if (diffMin === 1) return "Aktif 1 menit lalu";
+            return `Aktif ${diffMin} menit lalu`;
+        }
 
         // Error handler WebSocket
         socket.on("connect_error", (err) => {
