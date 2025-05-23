@@ -276,9 +276,22 @@
     @include('partials.notify')
     @include('frontend.partials.script')
     @stack('scriptpush')
+    <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
     <script>
-        "use strict";
+        // socket.on("user-online-status", function(data) {
+        //     console.log("[user-online-status] Event received:", data);
+        //     const [role, id] = data.user_id.split("-");
+        //     const selectors =
+        //         `.online-status[data-role="${role}"][data-id="${id}"], .user-status[data-role="${role}"][data-id="${id}"]`;
 
+        //     const $targets = $(selectors);
+        //     $targets.each(function() {
+        //         updateStatusElement($(this), data.online, data.last_seen);
+        //     });
+        // });
+
+        "use strict";
 
         function social_share(title, w, h) {
 
@@ -510,6 +523,14 @@
                 }
             })
         })
+    </script>
+    <script>
+        const socket = io("http://localhost:3000", {
+            query: {
+                role: "customer",
+                user_id: {{ auth()->id() }}
+            }
+        });
     </script>
 
     {{-- <script src="{{ mix('js/app.js') }}"></script>

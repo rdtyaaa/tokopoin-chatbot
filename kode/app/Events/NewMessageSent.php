@@ -22,7 +22,7 @@ class NewMessageSent implements ShouldBroadcast
     {
         $this->message = $message;
         $this->sellerId = (int) $sellerId;
-        $this->customerId = (int) $customerId;
+        $this->customerId = $customerId;
 
         Log::info('Event data', [
             'message' => $message,
@@ -33,11 +33,7 @@ class NewMessageSent implements ShouldBroadcast
 
     public function broadcastOn()
     {
-        Log::info('Broadcast channel:', [
-            'channel' => 'chat-channel.' . $this->sellerId . '.' . $this->customerId,
-        ]);
-
-        return new Channel('chat-channel.' . $this->sellerId . '.' . $this->customerId);
+        return [new Channel('chat-channel.seller.' . $this->sellerId), new Channel('chat-channel.customer.' . $this->customerId)];
     }
 
     public function broadcastAs()

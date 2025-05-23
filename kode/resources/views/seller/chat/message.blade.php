@@ -76,7 +76,7 @@
 
                         <div class="message-time">
                             <span>
-                                {{ $message->created_at->diffForHumans() }}
+                                {{ $message->created_at->format('H:i') }}
                             </span>
                         </div>
 

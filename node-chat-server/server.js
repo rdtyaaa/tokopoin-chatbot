@@ -24,7 +24,7 @@ const subscriber = new Redis({ host: "127.0.0.1", port: 6379 });
 const publisher = new Redis({ host: "127.0.0.1", port: 6379 });
 
 // Subscribe to channels from Laravel (match the pattern)
-subscriber.psubscribe("chat-channel.*.*", (err, count) => {
+subscriber.psubscribe("chat-channel.*", (err, count) => {
   if (err) {
     console.error("Failed to psubscribe:", err.message);
   } else {
@@ -38,9 +38,15 @@ subscriber.on("pmessage", (pattern, channel, message) => {
   const payload = parsed.data;
 
   const room = channel.replace("laravel_database:", "");
-  console.log("Message to room:", room, payload);
+  const { seller_id, customer_id, message: msg } = payload;
 
   io.to(room).emit("new-message", payload);
+  console.log("Message to room:", room, payload);
+
+  io.to(`notify.seller.${seller_id}`).emit("notify-new-chat", {
+    customer_id,
+    message: msg,
+  });
 });
 
 const axios = require("axios");
@@ -77,6 +83,12 @@ io.on("connection", async (socket) => {
   console.log("Emitting all-users-online with:", allOnline);
   socket.emit("all-users-online", allOnline);
 
+  if (role === "seller") {
+    const notifRoom = `notify.seller.${userId}`;
+    socket.join(notifRoom);
+    console.log(`Seller ${userId} joined notif room ${notifRoom}`);
+  }
+
   // Tangani join ke room chat
   socket.on("join", (room) => {
     socket.join(room);
@@ -90,10 +102,22 @@ io.on("connection", async (socket) => {
 
   // Tangani disconnect
   socket.on("disconnect", async () => {
-    await publisher.srem("online_users", globalUserId);
-    await saveLastSeenToDB(userId, role, new Date());
-    console.log("All online users:", allOnline);
-    io.emit("user-online-status", { user_id: globalUserId, online: false });
+    setTimeout(async () => {
+      const stillConnected = Array.from(io.sockets.sockets.values()).some(
+        (s) =>
+          s.handshake.query.user_id === userId &&
+          s.handshake.query.role === role
+      );
+
+      if (!stillConnected) {
+        await publisher.srem("online_users", globalUserId);
+        await saveLastSeenToDB(userId, role, new Date());
+        io.emit("user-online-status", {
+          user_id: globalUserId,
+          online: false,
+        });
+      }
+    }, 3000);
   });
 });
 

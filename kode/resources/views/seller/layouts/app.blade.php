@@ -55,7 +55,21 @@
     @stack('script-include')
     @stack('script-push')
 
+    <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
     <script>
+        // socket.on("user-online-status", function(data) {
+        //     console.log("[user-online-status] Event received:", data);
+        //     const [role, id] = data.user_id.split("-");
+        //     const selectors =
+        //         `.online-status[data-role="${role}"][data-id="${id}"], .user-status[data-role="${role}"][data-id="${id}"]`;
+
+        //     const $targets = $(selectors);
+        //     $targets.each(function() {
+        //         updateStatusElement($(this), data.online, data.last_seen);
+        //     });
+        // });
+
         'use strict'
 
         flatpickr("#datePicker", {
@@ -78,6 +92,14 @@
 
             if (!$(e.target).closest('.note-btn.dropdown-toggle').length) {
                 $(".note-dropdown-menu").removeClass("show");
+            }
+        });
+    </script>
+    <script>
+        const socket = io("http://localhost:3000", {
+            query: {
+                role: "seller",
+                user_id: {{ auth('seller')->user()->id }}
             }
         });
     </script>

@@ -1,22 +1,23 @@
 <?php
 
-use App\Http\Controllers\PaymentMethod\AamarpayPaymentController;
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Seller\Auth\SellerAuthenticateController;
-use App\Http\Controllers\Seller\Auth\RegiterController;
-use App\Http\Controllers\Seller\Auth\ForgotPasswordController;
-use App\Http\Controllers\Seller\Auth\PasswordResetController;
-use App\Http\Controllers\Seller\HomeController;
-use App\Http\Controllers\Seller\ProductController;
-use App\Http\Controllers\Seller\SubscriptionPlanController;
-use App\Http\Controllers\Seller\SupportTicketController;
-use App\Http\Controllers\Seller\DigitalProductController;
-use App\Http\Controllers\Seller\OrderController;
-use App\Http\Controllers\Seller\DigitalProductOrderController;
 use Illuminate\Support\Facades\DB;
-use App\Http\Controllers\Seller\CustomerChatController;
-
+use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Seller\HomeController;
+use App\Http\Controllers\Seller\OrderController;
 use App\Http\Controllers\Seller\DepositController;
+use App\Http\Controllers\Seller\ProductController;
+use App\Http\Controllers\Seller\Auth\RegiterController;
+use App\Http\Controllers\Seller\CustomerChatController;
+use App\Http\Controllers\Seller\SupportTicketController;
+use App\Http\Controllers\Seller\ChatbotSettingController;
+use App\Http\Controllers\Seller\DigitalProductController;
+use App\Http\Controllers\Seller\SubscriptionPlanController;
+use App\Http\Controllers\Seller\Auth\PasswordResetController;
+use App\Http\Controllers\Seller\Auth\ForgotPasswordController;
+use App\Http\Controllers\Seller\DigitalProductOrderController;
+
+use App\Http\Controllers\PaymentMethod\AamarpayPaymentController;
+use App\Http\Controllers\Seller\Auth\SellerAuthenticateController;
 
 $globalMiddleware = ['sanitizer',"dos.security" ,'sellerMode.status.check'];
 try {
@@ -176,6 +177,10 @@ Route::middleware($globalMiddleware)->group(function(){
             Route::get('digital/orders/search', [DigitalProductOrderController::class, 'search'])->name('digital.order.search');
             Route::get('digital/orders/date/search', [DigitalProductOrderController::class, 'dateSearch'])->name('digital.order.date.search');
             Route::get('digital/orders/details/{id}', [DigitalProductOrderController::class, 'details'])->name('digital.order.details');
+
+            // chatbot setting
+            Route::get('chatbot-setting', [ChatbotSettingController::class, 'edit'])->name('chatbot.setting.edit');
+            Route::post('chatbot-setting/update', [ChatbotSettingController::class, 'update'])->name('chatbot.setting.update');
 
             /** kyc */
             Route::controller(HomeController::class)

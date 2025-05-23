@@ -128,11 +128,11 @@
 
 @push('script-include')
     <script src="{{ asset('assets/global/js/chat.js') }}"></script>
+    <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
 @endpush
 
 @push('script-push')
-    <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
     <script>
         // var customerId;
         // var userId = '{{ request()->query('user_id') }}';
@@ -149,12 +149,12 @@
             }
         });
 
-        socket.on("connect", () => {
-            console.log("Connected to WebSocket as", userRole + '-' + sellerId);
+        // Terima status online user lain (misalnya untuk update badge)
+        socket.on("all-users-online", function(userIds) {
+            checkOnlineStatus(userIds);
         });
 
         socket.on("user-online-status", function(data) {
-            console.log("[user-online-status] Event received:", data);
             const [role, id] = data.user_id.split("-");
             const selectors =
                 `.online-status[data-role="${role}"][data-id="${id}"], .user-status[data-role="${role}"][data-id="${id}"]`;
@@ -165,42 +165,29 @@
             });
         });
 
-
-        console.log("[INIT] userId (seller):", sellerId);
-        console.log("[INIT] customerIds:", customerIds);
-
-        // Function untuk join WebSocket room
         function joinRoom(customerId) {
-            const room = `chat-channel.${sellerId}.${customerId}`;
-            console.log(`[SOCKET] Joining room: ${room}`);
+            const room = `chat-channel.customer.${customerId}`;
             socket.emit("join", room);
         }
 
         try {
-            customerIds.forEach(cId => {
-                joinRoom(cId);
+            customerIds.forEach(customerId => {
+                joinRoom(customerId);
             });
         } catch (e) {
-            console.error("Error emitting join events:", e);
+            console.error("Error emitting join events (seller):", e);
         }
 
-        // Saat dokumen siap dan ada userId dari query, load pesan & join room
-        $(document).ready(function() {
-            console.log("[DOC READY] Page loaded");
-            if (userId) {
-                console.log(`[DOC READY] userId found in query: ${userId}, joining room`);
-                getMessage(userId);
-                // joinRoom(userId);
-            } else {
-                console.log("[DOC READY] No userId in query");
-            }
-
-            // Terima status online user lain (misalnya untuk update badge)
-            socket.on("all-users-online", function(userIds) {
-                console.log("[all-users-online] Event received:", userIds);
-                checkOnlineStatus(userIds);
-            });
-        });
+        // // Saat dokumen siap dan ada userId dari query, load pesan & join room
+        // $(document).ready(function() {
+        //     console.log("[DOC READY] Page loaded");
+        //     if (userId) {
+        //         console.log(`[DOC READY] userId found in query: ${userId}, joining room`);
+        //         getMessage(userId);
+        //     } else {
+        //         console.log("[DOC READY] No userId in query");
+        //     }
+        // });
 
         // Klik customer di sidebar
         $(document).on('click', '.get-chat', function(e) {
@@ -210,71 +197,71 @@
             $(this).find('.message-num').remove();
 
             customerId = $(this).attr('id');
-            console.log(`[SIDEBAR CLICK] Clicked customerId: ${customerId}`);
             getMessage(customerId, false, null, true, false);
 
         });
 
+        socket.on("notify-new-chat", (data) => {
+            const id = data.customer_id; // atau sesuaikan: data.id / data.userId / data.chatId
+            const existingChat = $(`.get-chat#${id}`);
+
+            if (existingChat.length === 0) {
+                joinRoom(id)
+                refreshChatSidebar();
+            }
+        });
+
+
         // Terima pesan baru
         socket.on("new-message", function(data) {
-            console.log("[SOCKET] New message received:", data);
-
             const currentCustomerId = $('.get-chat.active').attr('id');
-            console.log(`[SOCKET] Active customerId: ${currentCustomerId}`);
-
-
+            const $item = $(`#${data.customer_id}`)
             if (data.customer_id == currentCustomerId) {
-                getMessage(currentCustomerId, false, null, true, false);
-
-
-                const $item = $(`#${data.customer_id}`);
-
-                // Update pesan preview
-                $item.find('p').text(data.message.message);
-                console.log("data message: ", data.message.message);
-
-                // Update waktu
-                $item.find('.time').text(moment(data.message.created_at).fromNow());
-
-                // Tambah badge 'New' jika belum dibaca (bisa berdasarkan data.is_seen = false)
-                // if (!data.is_seen) {
-                //     if ($item.find('.message-num').length === 0) {
-                //         $item.find('.d-flex.justify-content-between.align-items-center.flex-wrap')
-                //             .last()
-                //             .append(`<span class="message-num">New</span>`);
-                //     }
-                // } else {
-                //     $item.find('.message-num').remove();
-                // }
+                if (data.message.sender_role == "customer") {
+                    updateMessage(data.message.message, data.message.created_at);
+                }
+                updateSidebar($item, data.message.message, data.message.created_at);
             } else {
-                const $item = $(`#${data.customer_id}`);
-                console.log("rubah customer ini: ", $item);
-
-
-                // Tambahkan badge dan update preview
-                $item.find('p').text(data.message.message);
-                $item.find('.time').text(moment(data.message.created_at).fromNow());
-
+                updateSidebar($item, data.message.message, data.message.created_at);
                 if ($item.find('.message-num').length === 0) {
                     $item.find('.d-flex.justify-content-between.align-items-center.flex-wrap')
                         .last()
                         .append(`<span class="message-num">New</span>`);
                 }
-
-                // Tambahkan highlight class
                 $item.addClass('unread-message');
             }
-
-
-            // if (data.customer_id == currentCustomerId) {
-            //     console.log(`[SOCKET] Message is for active chat. Refreshing messages...`);
-            //     getMessage(currentCustomerId, false, null, true, false);
-            // } else {
-            //     console.log(`[SOCKET] Message is for another chat. Refreshing sidebar only.`);
-            // }
-
-            // refreshChatSidebar();
         });
+
+        function updateMessage(messageText, createdAt) {
+            const $lastMsg = $('.messages .message-left').last();
+            const $newMsg = $lastMsg.clone();
+
+            // Update isi pesan dan waktu
+            $newMsg.find('p').text(messageText);
+            $newMsg.find('.message-time span').text(formatTime(createdAt));
+
+            // Tambahkan ke elemen chat
+            $('.messages').append($newMsg);
+            scroll_bottom()
+        }
+
+
+        function updateSidebar($item, message, createdAt) {
+            $item.find('p').text(message);
+
+            const formattedTime = formatTime(createdAt);
+            $item.find('.time').text(formattedTime);
+        }
+
+
+        // if (data.customer_id == currentCustomerId) {
+        //     console.log(`[SOCKET] Message is for active chat. Refreshing messages...`);
+        //     getMessage(currentCustomerId, false, null, true, false);
+        // } else {
+        //     console.log(`[SOCKET] Message is for another chat. Refreshing sidebar only.`);
+        // }
+
+        // refreshChatSidebar();
 
         function checkOnlineStatus(userIds) {
             const onlineSet = new Set(userIds);
@@ -307,21 +294,126 @@
             }
         }
 
+        function formatTime(date) {
+            if (!date) return "";
+            const localTime = moment.utc(date).local();
+            if (!localTime.isValid()) return "Waktu tidak valid";
+            return localTime.format('HH:mm'); // Format 24 jam
+        }
+
+
         function timeAgo(date) {
-            console.log("Raw date:", date, "Parsed:", moment.utc(date).local().format());
-            if (!date) return "Baru saja aktif";
+            if (!date) return "Baru saja";
 
             const localTime = moment.utc(date).local();
             if (!localTime.isValid()) return "Waktu tidak valid";
 
-            const diffMin = moment().diff(localTime, 'minutes');
+            const now = moment();
+            const diffMinutes = now.diff(localTime, 'minutes');
+            const diffHours = now.diff(localTime, 'hours');
+            const diffDays = now.diff(localTime, 'days');
+            const diffMonths = now.diff(localTime, 'months');
+            const diffYears = now.diff(localTime, 'years');
 
-            if (diffMin < 1) return "Baru saja aktif";
-            if (diffMin === 1) return "Aktif 1 menit lalu";
-            return `Aktif ${diffMin} menit lalu`;
+            if (diffMinutes < 1) return "Baru saja";
+            if (diffMinutes < 60) return `Aktif ${diffMinutes} menit lalu`;
+            if (diffHours < 24) return `Aktif ${diffHours} jam lalu`;
+            if (diffDays < 30) return `Aktif ${diffDays} hari lalu`;
+            if (diffMonths < 12) return `Aktif ${diffMonths} bulan lalu`;
+            return `Aktif ${diffYears} tahun lalu`;
         }
 
-        // // Sidebar refresh
+        // function refreshChatSidebar() {
+        //     console.log("Refreshing chat sidebar...");
+
+        //     $.ajax({
+        //         url: `/seller/customer/chat/sidebar`,
+        //         type: 'GET',
+        //         success: function(data) {
+        //             console.log("Sidebar updated.", data);
+        //             $('.session-list').html(data);
+
+        //             const $onlineStatus = $(".online-status, .user-status");
+        //             console.log($onlineStatus);
+
+        //             const userIds = [];
+        //             $onlineStatus.each(function() {
+        //                 const role = $(this).data("role");
+        //                 const id = $(this).data("id");
+        //                 userIds.push(`${role}-${id}`);
+        //             });
+
+        //             checkOnlineStatus(userIds);
+        //         },
+        //         error: function(xhr) {
+        //             console.error("Failed to refresh sidebar:", xhr.responseText);
+        //         }
+        //     });
+        // }
+
+        function refreshChatSidebar() {
+            console.log("Refreshing chat sidebar...");
+
+            $.ajax({
+                url: `/seller/customer/chat/sidebar`,
+                type: 'GET',
+                success: function(data) {
+                    console.log("Sidebar data fetchedd.");
+
+                    const $sessionList = $('.session-list');
+
+                    // Hapus elemen `.empty-list` dan class-nya jika ada
+                    console.log("empty list: ", $sessionList.find('.empty-list'));
+                    $sessionList.find('.empty-list').remove();
+                    $sessionList.removeClass('empty-list');
+
+                    const $tempContainer = $('<div>').html(data);
+                    const $newSessions = $tempContainer.find('.session-single');
+
+                    $newSessions.each(function() {
+                        const $newItem = $(this);
+                        const id = $newItem.attr('id');
+                        const $existingItem = $(`.session-single#${id}`);
+
+                        if ($existingItem.length) {
+                            // ✅ Simpan class penting dari elemen lama
+                            const isActive = $existingItem.hasClass('active');
+                            const $oldStatusDiv = $existingItem.find('.online-status');
+                            const oldStatusClass = $oldStatusDiv.attr('class');
+
+                            // Gantikan seluruh isi lama dengan yang baru
+                            $existingItem.html($newItem.html());
+
+                            // ✅ Kembalikan class penting
+                            if (isActive) $existingItem.addClass('active');
+                            const $newStatusDiv = $existingItem.find('.online-status');
+                            $newStatusDiv.attr('class',
+                                oldStatusClass); // overwrite class online-status
+
+                        } else {
+                            // Append chat baru
+                            $('.session-list').append($newItem);
+                        }
+                    });
+
+                    // Jalankan pengecekan status online
+                    const userIds = [];
+                    $(".online-status, .user-status").each(function() {
+                        const role = $(this).data("role");
+                        const id = $(this).data("id");
+                        userIds.push(`${role}-${id}`);
+                    });
+
+                    checkOnlineStatus(userIds);
+                },
+                error: function(xhr) {
+                    console.error("Failed to refresh sidebar:", xhr.responseText);
+                }
+            });
+        }
+
+
+        // Sidebar refresh
         // function refreshChatSidebar() {
         //     console.log("[AJAX] Refreshing chat sidebar...");
 
@@ -381,6 +473,19 @@
                 },
                 success: function(response) {
                     $('.chat-message').html(response.chat);
+
+                    const $onlineStatus = $(".online-status, .user-status");
+
+                    if ($onlineStatus.length > 0) {
+                        const userIds = [];
+                        $onlineStatus.each(function() {
+                            const role = $(this).data("role");
+                            const id = $(this).data("id");
+                            userIds.push(`${role}-${id}`);
+                        });
+
+                        checkOnlineStatus(userIds);
+                    }
 
                     if (scroll) {
                         scroll_bottom()

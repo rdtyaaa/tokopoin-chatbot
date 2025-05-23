@@ -21,9 +21,13 @@
         .status-offline .status-dot {
             background-color: #ccc;
         }
+
+        .template-btn {
+            white-space: nowrap;
+            margin: 0.5em;
+        }
     </style>
 @endpush
-
 @section('content')
     @php
         $user = auth()->user();
@@ -144,35 +148,34 @@
 
         socket.on("connect", () => {
             console.log("Connected to WebSocket as", userRole + '-' + customerId);
-        });
 
-        socket.on("user-online-status", function(data) {
-            console.log("[user-online-status] Event received:", data);
-            const [role, id] = data.user_id.split("-");
-            const selectors =
-                `.online-status[data-role="${role}"][data-id="${id}"], .user-status[data-role="${role}"][data-id="${id}"]`;
-
-            const $targets = $(selectors);
-            $targets.each(function() {
-                updateStatusElement($(this), data.online, data.last_seen);
+            // Terima status online user lain (misalnya untuk update badge)
+            socket.on("all-users-online", function(userIds) {
+                console.log("[all-users-online] Event received:", userIds);
+                checkOnlineStatus(userIds);
             });
         });
 
+        // Error handler WebSocket
+        socket.on("connect_error", (err) => {
+            console.error("WebSocket connection error:", err.message);
+        });
+        socket.on("error", (err) => {
+            console.error("WebSocket general error:", err);
+        });
 
-        // Function untuk join WebSocket room
         function joinRoom(sellerId) {
-            const room = `chat-channel.${sellerId}.${customerId}`;
-            console.log("Joining room:", room);
+            const room = `chat-channel.seller.${sellerId}`;
+            console.log(`[SOCKET] Customer joining room: ${room}`);
             socket.emit("join", room);
         }
 
-        // Join semua room seller yang pernah chat
         try {
-            sellerIds.forEach(sId => {
-                joinRoom(sId);
+            sellerIds.forEach(sellerId => {
+                joinRoom(sellerId);
             });
         } catch (e) {
-            console.error("Error emitting join events:", e);
+            console.error("Error emitting join events (customer):", e);
         }
 
         // Saat dokumen siap dan ada sellerId dari query, load pesan & join room
@@ -180,15 +183,14 @@
             if (sellerId) {
                 console.log(`[DOC READY] sellerId found in query: ${sellerId}, joining room`);
                 getMessage(sellerId);
-                // joinRoom(sellerId);
             }
-            // Terima status online user lain (misalnya untuk update badge)
-            socket.on("all-users-online", function(userIds) {
-                console.log("[all-users-online] Event received:", userIds);
-                checkOnlineStatus(userIds);
-            });
-
         });
+
+        $(document).on('click', '.template-btn', function(e) {
+            const message = $(this).text().trim().replace(/\s+/g, ' ');
+            $('.chat-message-input').val(message).focus();
+        });
+
 
         // Klik di daftar seller → aktifkan, ambil pesan, join room
         $(document).on('click', '.get-chat', function(e) {
@@ -208,35 +210,91 @@
 
             const currentSellerId = $('.get-chat.active').attr('id');
             console.log("Current Seller Id:", currentSellerId);
+            const $item = $(`#${data.seller_id}`);
+
+            // Cek jika customer belum join room seller tersebut, dan lakukan join
+            // if (!Object.values(socket.rooms).includes(`chat-channel.seller.${data.seller_id}`)) {
+            // joinRoom(data.seller_id);
+            // }
 
             if (data.seller_id == currentSellerId) {
-                getMessage(currentSellerId, false, null, true, false);
-
-
-                const $item = $(`#${data.seller_id}`);
-
-                // Update pesan preview
-                $item.find('p').text(data.message.message);
-
-                // Update waktu
-                $item.find('.time').text(moment(data.message.created_at).fromNow());
-
+                if (data.message.sender_role == "seller") {
+                    updateMessage(data.message.message, data.message.created_at);
+                }
+                updateSidebar($item, data.message.message, data.message.created_at);
             } else {
-                const $item = $(`#${data.seller_id}`);
-
-                // Tambahkan badge dan update preview
-                $item.find('p').text(data.message.message);
-                $item.find('.time').text(moment(data.message.created_at).fromNow());
+                updateSidebar($item, data.message.message, data.message.created_at);
 
                 if ($item.find('.message-num').length === 0) {
                     $item.find('.d-flex.justify-content-between.align-items-center.flex-wrap')
                         .last()
                         .append(`<span class="message-num">New</span>`);
                 }
-
-                // Tambahkan highlight class
                 $item.addClass('unread-message');
             }
+        });
+
+        function updateMessage(messageText, createdAt) {
+            const $lastMsg = $('.messages .message-left').last();
+            const $newMsg = $lastMsg.clone();
+
+            // Update isi pesan dan waktu
+            $newMsg.find('p').text(messageText);
+            $newMsg.find('.message-time span').text(formatTime(createdAt));
+
+            // Tambahkan ke elemen chat
+            $('.messages').append($newMsg);
+            scroll_bottom()
+        }
+
+        function updateSidebar($item, message, createdAt) {
+            // Update preview pesan
+            $item.find('p').text(message);
+
+            // Update waktu
+            const formattedTime = formatTime(createdAt);
+            $item.find('.time').text(formattedTime);
+        }
+
+        function refreshChatSidebar() {
+            console.log("Refreshing chat sidebar...");
+
+            const activeId = $('.get-chat.active').attr('id'); // Simpan ID yg aktif
+
+            $.ajax({
+                url: `/user/seller/chat/sidebar`,
+                type: 'GET',
+                success: function(data) {
+                    console.log("Sidebar updated.");
+                    $('.session-list').html(data);
+
+                    // Restore active class setelah sidebar di-refresh
+                    if (activeId) {
+                        const restoredElement = $(`.get-chat#${activeId}`);
+                        if (restoredElement.length) {
+                            restoredElement.addClass('active');
+                            console.log(`Restored active chat to ID: ${activeId}`);
+                        } else {
+                            console.warn(`Active ID ${activeId} not found after refresh.`);
+                        }
+                    }
+                },
+                error: function(xhr) {
+                    console.error("Failed to refresh sidebar:", xhr.responseText);
+                }
+            });
+        }
+
+        socket.on("user-online-status", function(data) {
+            console.log("[user-online-status] Event received:", data);
+            const [role, id] = data.user_id.split("-");
+            const selectors =
+                `.online-status[data-role="${role}"][data-id="${id}"], .user-status[data-role="${role}"][data-id="${id}"]`;
+
+            const $targets = $(selectors);
+            $targets.each(function() {
+                updateStatusElement($(this), data.online, data.last_seen);
+            });
         });
 
         function checkOnlineStatus(userIds) {
@@ -270,34 +328,41 @@
             }
         }
 
+        function formatTime(date) {
+            if (!date) return "";
+            const localTime = moment.utc(date).local();
+            if (!localTime.isValid()) return "Waktu tidak valid";
+            return localTime.format('HH:mm'); // Format 24 jam
+        }
+
         function timeAgo(date) {
-            console.log("Raw date:", date, "Parsed:", moment.utc(date).local().format());
             if (!date) return "Baru saja aktif";
 
             const localTime = moment.utc(date).local();
             if (!localTime.isValid()) return "Waktu tidak valid";
 
-            const diffMin = moment().diff(localTime, 'minutes');
+            const now = moment();
+            const diffMinutes = now.diff(localTime, 'minutes');
+            const diffHours = now.diff(localTime, 'hours');
+            const diffDays = now.diff(localTime, 'days');
+            const diffMonths = now.diff(localTime, 'months');
+            const diffYears = now.diff(localTime, 'years');
 
-            if (diffMin < 1) return "Baru saja aktif";
-            if (diffMin === 1) return "Aktif 1 menit lalu";
-            return `Aktif ${diffMin} menit lalu`;
+            if (diffMinutes < 1) return "Baru saja aktif";
+            if (diffMinutes < 60) return `Aktif ${diffMinutes} menit lalu`;
+            if (diffHours < 24) return `Aktif ${diffHours} jam lalu`;
+            if (diffDays < 30) return `Aktif ${diffDays} hari lalu`;
+            if (diffMonths < 12) return `Aktif ${diffMonths} bulan lalu`;
+            return `Aktif ${diffYears} tahun lalu`;
         }
 
-        // Error handler WebSocket
-        socket.on("connect_error", (err) => {
-            console.error("WebSocket connection error:", err.message);
-        });
-        socket.on("error", (err) => {
-            console.error("WebSocket general error:", err);
-        });
-
-        function getMessage(sellerId, loader = true, page = null, scroll = true, append = false) {
-
-            var url = "{{ route('user.seller.chat.message', ':seller_id') }}"
-                .replace(':seller_id', sellerId);
+        function
+        getMessage(sellerId, loader = true, page = null, scroll = true, append = false) {
+            var
+                url = "{{ route('user.seller.chat.message', ':seller_id') }}".replace(':seller_id', sellerId);
             if (page) {
-                url = url + '?page=' + page
+                url = url +
+                    '?page=' + page
             }
             $.ajax({
                 url: url,
@@ -308,11 +373,9 @@
                         $('.chat-spinner-loader').removeClass('d-none')
                         $('.empty-message').addClass('d-none')
                     }
-
                 },
                 success: function(response) {
                     $('.chat-message').html(response.chat);
-
                     if ('{{ $product_url }}') {
                         var counter = $('#ajaxRequestCounter').val();
                         var chatMessage = $('.chat-message-input');
@@ -321,8 +384,18 @@
                         } else {
                             chatMessage.html('')
                         }
-
                         $('#ajaxRequestCounter').val(counter + 1);
+                    }
+                    const $onlineStatus = $(".online-status, .user-status");
+                    if ($onlineStatus.length > 0) {
+                        const userIds = [];
+                        $onlineStatus.each(function() {
+                            const role = $(this).data("role");
+                            const id = $(this).data("id");
+                            userIds.push(`${role}-${id}`);
+                        });
+
+                        checkOnlineStatus(userIds);
                     }
 
                     if (scroll) {
@@ -376,9 +449,10 @@
                 method: 'POST',
                 url: "{{ route('user.seller.chat.send_message') }}",
                 beforeSend: function() {
-                    $('.message-submit').html(`<div class="ms-1 spinner-border spinner-border-sm text-white note-btn-spinner " role="status">
-                    <span class="visually-hidden"></span>
-                </div>`);
+                    $('.message-submit').html(`<div class="spinner-border spinner-border-sm note-btn-spinner ms-1 text-white"
+            role="status">
+            <span class="visually-hidden"></span>
+        </div>`);
                 },
                 data: data,
                 dataType: 'json',

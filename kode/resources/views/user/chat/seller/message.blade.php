@@ -76,7 +76,7 @@
 
                         <div class="message-time">
                             <span>
-                                {{ $message->created_at->diffForHumans() }}
+                                {{ $message->created_at->format('H:i') }}
                             </span>
                         </div>
 
@@ -95,6 +95,15 @@
                     'message' => translate('No message found'),
                 ])
             @endforelse
+        </div>
+
+        <div class="template-messages">
+            <button type="button" class="btn btn-outline-secondary btn-sm template-btn rounded-pill">
+                Apakah barang masih ada?</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm template-btn rounded-pill">
+                Bisa nego harga?</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm template-btn rounded-pill">
+                Dimana lokasi COD-nya?</button>
         </div>
 
         <form enctype="multipart/form-data" id="chatinput-form">

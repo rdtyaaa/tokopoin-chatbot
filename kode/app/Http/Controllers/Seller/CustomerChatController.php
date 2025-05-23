@@ -40,7 +40,7 @@ class CustomerChatController extends Controller
 
     public function list()
     {
-        
+
         $customerIds = CustomerSellerConversation::with(['customer', 'customer.country'])
             ->where('seller_id', $this->seller->id)
             ->select('customer_id')
@@ -57,7 +57,7 @@ class CustomerChatController extends Controller
     }
 
     public function getChat($customer_id): array
-    {
+    {;
         $user = User::with(['country', 'billingAddress'])
             ->where('id', $customer_id)
             ->first();
@@ -147,7 +147,7 @@ class CustomerChatController extends Controller
     public function sidebar()
     {
         $customerIds = CustomerSellerConversation::with(['customer', 'customer.country'])
-            ->where('seller_id', auth()->id())
+            ->where('seller_id', $this->seller->id)
             ->select('customer_id')
             ->distinct()
             ->pluck('customer_id')
