@@ -13,12 +13,12 @@ use Illuminate\Support\Facades\Log;
 use App\Http\Controllers\Controller;
 use App\Enums\Settings\NotificationType;
 use App\Models\CustomerSellerConversation;
-use App\Rules\General\FileExtentionCheckRule;
 
 class SellerChatController extends Controller
 {
     use Notify;
     protected ?User $user;
+
     public function __construct()
     {
         $this->middleware(function ($request, $next) {
@@ -30,11 +30,7 @@ class SellerChatController extends Controller
     public function list()
     {
         $productId = request()->query('product_id');
-        if ($productId) {
-            $product = Product::findOrFail($productId);
-
-            $url = $product->product_type == Product::DIGITAL ? route('digital.product.details', [make_slug($product->name), $product->id]) : route('product.details', [make_slug($product->name), $product->id]);
-        }
+        $sellerId = request()->query('seller_id');
 
         $sellerIds = CustomerSellerConversation::with(['customer', 'customer.country'])
             ->where('customer_id', $this->user->id)
@@ -43,12 +39,27 @@ class SellerChatController extends Controller
             ->pluck('seller_id')
             ->toArray();
 
+        // Jika ada seller_id dari query dan belum ada di conversation, tambahkan
+        if ($sellerId && !in_array($sellerId, $sellerIds)) {
+            $sellerIds[] = $sellerId;
+        }
+
+        $sellers = Seller::with(['latestConversation'])
+            ->whereIn('id', $sellerIds)
+            ->get();
+
+        // Jika seller dari query belum pernah chat, tambahkan ke collection
+        if ($sellerId && !$sellers->contains('id', $sellerId)) {
+            $newSeller = Seller::find($sellerId);
+            if ($newSeller) {
+                $newSeller->latestConversation = null;
+                $sellers->prepend($newSeller);
+            }
+        }
+
         return view('user.chat.seller.list', [
             'title' => translate('User to seller chat'),
-            'sellers' => Seller::with(['latestConversation'])
-                ->whereIn('id', $sellerIds)
-                ->get(),
-            'product_url' => @$url,
+            'sellers' => $sellers,
         ]);
     }
 
@@ -59,7 +70,7 @@ class SellerChatController extends Controller
         if (!$seller) {
             return [
                 'status' => false,
-                'message' => translate('Invalid delivery man'),
+                'message' => translate('Invalid seller'),
             ];
         }
 
@@ -90,7 +101,7 @@ class SellerChatController extends Controller
             $request->validate([
                 'seller_id' => 'required|exists:sellers,id',
                 'message' => 'required|max:191',
-                'files.*' => ['nullable', new FileExtentionCheckRule(['pdf', 'doc', 'exel', 'jpg', 'jpeg', 'png', 'jfif', 'webp'], 'file')],
+                'product_id' => 'nullable|exists:products,id',
             ]);
 
             $seller = Seller::where('id', $request->input('seller_id'))->first();
@@ -106,15 +117,25 @@ class SellerChatController extends Controller
             $message->sender_role = 'customer';
             $message->is_seen = 0;
 
-            if ($request->hasFile('files')) {
-                $files = [];
-                foreach ($request->file('files') as $file) {
-                    try {
-                        $files[] = upload_new_file($file, file_path()['chat']['path']);
-                    } catch (\Exception $exp) {
-                    }
+            // Handle product attachment
+            if ($request->input('product_id')) {
+                $product = Product::find($request->input('product_id'));
+                if ($product) {
+                    $productUrl = $product->product_type == Product::DIGITAL
+                        ? route('digital.product.details', [make_slug($product->name), $product->id])
+                        : route('product.details', [make_slug($product->name), $product->id]);
+
+                    // Add product info as attachment
+                    $productAttachment = [
+                        'type' => 'product',
+                        'product_id' => $product->id,
+                        'product_name' => $product->name,
+                        'product_url' => $productUrl,
+                        'product_image' => $product->image
+                    ];
+
+                    $message->files = [json_encode($productAttachment)];
                 }
-                $message->files = $files;
             }
 
             $message->save();
@@ -124,18 +145,6 @@ class SellerChatController extends Controller
                 'seller_id' => $request->input('seller_id'),
                 'customer_id' => $this->user->id,
             ]);
-            // event(new NewMessageSent($message, $request->input('seller_id')));
-
-            #FIREBASE NOTIFICATIONS
-            // if ($seller && $seller->fcm_token) {
-            //     $payload = (object) [
-            //         'title' => translate('New messsage'),
-            //         'message' => translate('You have a new message form ') . $this->user->name,
-            //         'user_id' => $this->user->id,
-            //         'type' => NotificationType::CUSTOMER_CHAT->value,
-            //     ];
-            //     $this->fireBaseNotification($seller->fcm_token, $payload);
-            // }
 
             return ['status' => true, 'seller_id' => $seller->id];
         } catch (\Exception $ex) {

@@ -8,9 +8,7 @@
         ) {
             $isSeen = false;
         }
-
     @endphp
-
     <div class="session-single get-chat {{ !$isSeen ? 'unread-message' : '' }}" id="{{ $seller->id }}">
         <div class="seller-icon">
             <img src="{{ show_image(file_path()['profile']['seller']['path'] . '/' . $seller->image, file_path()['profile']['seller']['size']) }}"
@@ -26,11 +24,21 @@
                     {{ $seller->name . ' ' . $seller->last_name }}
                 </div>
                 <div class="time">
-                    {{ $seller->latestConversation->created_at->diffForHumans() }}
+                    @if($seller->latestConversation && $seller->latestConversation->created_at)
+                        {{ $seller->latestConversation->created_at->diffForHumans() }}
+                    @else
+                        {{ translate('Just now') }}
+                    @endif
                 </div>
             </div>
             <div class="d-flex justify-content-between align-items-center flex-wrap">
-                <p>{{ $seller->latestConversation->message }}</p>
+                <p>
+                    @if($seller->latestConversation && $seller->latestConversation->message)
+                        {{ $seller->latestConversation->message }}
+                    @else
+                        {{ translate('Start a conversation...') }}
+                    @endif
+                </p>
                 @if (!$isSeen)
                     <span class="message-num">
                         {{ translate('New') }}

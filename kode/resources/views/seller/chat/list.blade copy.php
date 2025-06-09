@@ -134,11 +134,13 @@
 
 @push('script-push')
     <script>
+        // var customerId;
+        // var userId = '{{ request()->query('user_id') }}';
+
         var userRole = "seller";
         var userId = '{{ request()->query('user_id') }}';
         const sellerId = {{ auth('seller')->user()->id }};
         const customerIds = {!! json_encode($customers->pluck('id')) !!};
-        let existingCustomerChats = new Set();
 
         const socket = io("http://localhost:3000", {
             query: {
@@ -176,74 +178,57 @@
             console.error("Error emitting join events (seller):", e);
         }
 
+        // // Saat dokumen siap dan ada userId dari query, load pesan & join room
+        // $(document).ready(function() {
+        //     console.log("[DOC READY] Page loaded");
+        //     if (userId) {
+        //         console.log(`[DOC READY] userId found in query: ${userId}, joining room`);
+        //         getMessage(userId);
+        //     } else {
+        //         console.log("[DOC READY] No userId in query");
+        //     }
+        // });
+
+        // Klik customer di sidebar
         $(document).on('click', '.get-chat', function(e) {
             $('.get-chat').removeClass('active');
             $(this).addClass('active');
 
-            // Remove notification badge
             $(this).find('.message-num').remove();
-            $(this).removeClass('unread-message');
 
-            const customerId = $(this).attr('id');
-
-            // Ensure customer is tracked
-            if (!existingCustomerChats.has(customerId)) {
-                existingCustomerChats.add(customerId);
-                joinRoom(customerId);
-            }
-
+            customerId = $(this).attr('id');
             getMessage(customerId, false, null, true, false);
+
         });
 
         socket.on("notify-new-chat", (data) => {
-            const customerId = data.customer_id;
-            console.log(`[NOTIFY] New chat notification for customer: ${customerId}`);
+            const id = data.customer_id; // atau sesuaikan: data.id / data.userId / data.chatId
+            const existingChat = $(`.get-chat#${id}`);
 
-            if (!existingCustomerChats.has(customerId)) {
-                console.log(`[NOTIFY] New customer detected: ${customerId}`);
-
-                joinRoom(customerId);
-                existingCustomerChats.add(customerId);
+            if (existingChat.length === 0) {
+                joinRoom(id)
                 refreshChatSidebar();
-
-                showNewCustomerNotification(data);
-            } else {
-                console.log(`[NOTIFY] Existing customer: ${customerId} - ignoring notify event`);
             }
         });
 
 
+        // Terima pesan baru
         socket.on("new-message", function(data) {
             const currentCustomerId = $('.get-chat.active').attr('id');
-            const customerId = data.customer_id;
-            const $item = $(`#${customerId}`);
-
-            console.log(`[MESSAGE] New message from customer: ${customerId}`);
-
-            if (!existingCustomerChats.has(customerId)) {
-                existingCustomerChats.add(customerId);
-            }
-
-            if (customerId == currentCustomerId) {
-                console.log('[MESSAGE] Message for active chat');
-
+            const $item = $(`#${data.customer_id}`)
+            if (data.customer_id == currentCustomerId) {
                 if (data.message.sender_role == "customer") {
                     updateMessage(data.message.message, data.message.created_at);
                 }
                 updateSidebar($item, data.message.message, data.message.created_at);
             } else {
-                console.log('[MESSAGE] Message for inactive chat');
-
                 updateSidebar($item, data.message.message, data.message.created_at);
-
                 if ($item.find('.message-num').length === 0) {
                     $item.find('.d-flex.justify-content-between.align-items-center.flex-wrap')
                         .last()
                         .append(`<span class="message-num">New</span>`);
                 }
                 $item.addClass('unread-message');
-
-                showNewMessageNotification(data);
             }
         });
 
@@ -268,6 +253,16 @@
             $item.find('.time').text(formattedTime);
         }
 
+
+        // if (data.customer_id == currentCustomerId) {
+        //     console.log(`[SOCKET] Message is for active chat. Refreshing messages...`);
+        //     getMessage(currentCustomerId, false, null, true, false);
+        // } else {
+        //     console.log(`[SOCKET] Message is for another chat. Refreshing sidebar only.`);
+        // }
+
+        // refreshChatSidebar();
+
         function checkOnlineStatus(userIds) {
             const onlineSet = new Set(userIds);
 
@@ -284,20 +279,6 @@
                     });
                 }
             });
-        }
-
-        // Helper function untuk check online status
-        function checkOnlineStatusForAllUsers() {
-            const userIds = [];
-            $(".online-status, .user-status").each(function() {
-                const role = $(this).data("role");
-                const id = $(this).data("id");
-                userIds.push(`${role}-${id}`);
-            });
-
-            if (userIds.length > 0) {
-                checkOnlineStatus(userIds);
-            }
         }
 
         function updateStatusElement($el, isOnline, lastSeen = null) {
@@ -342,6 +323,34 @@
             return `Aktif ${diffYears} tahun lalu`;
         }
 
+        // function refreshChatSidebar() {
+        //     console.log("Refreshing chat sidebar...");
+
+        //     $.ajax({
+        //         url: `/seller/customer/chat/sidebar`,
+        //         type: 'GET',
+        //         success: function(data) {
+        //             console.log("Sidebar updated.", data);
+        //             $('.session-list').html(data);
+
+        //             const $onlineStatus = $(".online-status, .user-status");
+        //             console.log($onlineStatus);
+
+        //             const userIds = [];
+        //             $onlineStatus.each(function() {
+        //                 const role = $(this).data("role");
+        //                 const id = $(this).data("id");
+        //                 userIds.push(`${role}-${id}`);
+        //             });
+
+        //             checkOnlineStatus(userIds);
+        //         },
+        //         error: function(xhr) {
+        //             console.error("Failed to refresh sidebar:", xhr.responseText);
+        //         }
+        //     });
+        // }
+
         function refreshChatSidebar() {
             console.log("Refreshing chat sidebar...");
 
@@ -349,52 +358,53 @@
                 url: `/seller/customer/chat/sidebar`,
                 type: 'GET',
                 success: function(data) {
-                    console.log("Sidebar data fetched.");
+                    console.log("Sidebar data fetchedd.");
 
                     const $sessionList = $('.session-list');
 
-                    const previousCustomers = new Set(existingCustomerChats);
-
+                    // Hapus elemen `.empty-list` dan class-nya jika ada
+                    console.log("empty list: ", $sessionList.find('.empty-list'));
                     $sessionList.find('.empty-list').remove();
                     $sessionList.removeClass('empty-list');
 
                     const $tempContainer = $('<div>').html(data);
                     const $newSessions = $tempContainer.find('.session-single');
 
-                    existingCustomerChats.clear();
-
                     $newSessions.each(function() {
                         const $newItem = $(this);
                         const id = $newItem.attr('id');
                         const $existingItem = $(`.session-single#${id}`);
 
-                        existingCustomerChats.add(id);
-
                         if ($existingItem.length) {
+                            // ✅ Simpan class penting dari elemen lama
                             const isActive = $existingItem.hasClass('active');
                             const $oldStatusDiv = $existingItem.find('.online-status');
                             const oldStatusClass = $oldStatusDiv.attr('class');
 
+                            // Gantikan seluruh isi lama dengan yang baru
                             $existingItem.html($newItem.html());
 
+                            // ✅ Kembalikan class penting
                             if (isActive) $existingItem.addClass('active');
                             const $newStatusDiv = $existingItem.find('.online-status');
-                            if (oldStatusClass) {
-                                $newStatusDiv.attr('class', oldStatusClass);
-                            }
+                            $newStatusDiv.attr('class',
+                                oldStatusClass); // overwrite class online-status
+
                         } else {
+                            // Append chat baru
                             $('.session-list').append($newItem);
-                            joinRoom(id);
                         }
                     });
 
-                    const newCustomers = Array.from(existingCustomerChats).filter(id => !previousCustomers.has(
-                        id));
-                    if (newCustomers.length > 0) {
-                        console.log('New customers added:', newCustomers);
-                    }
+                    // Jalankan pengecekan status online
+                    const userIds = [];
+                    $(".online-status, .user-status").each(function() {
+                        const role = $(this).data("role");
+                        const id = $(this).data("id");
+                        userIds.push(`${role}-${id}`);
+                    });
 
-                    checkOnlineStatusForAllUsers();
+                    checkOnlineStatus(userIds);
                 },
                 error: function(xhr) {
                     console.error("Failed to refresh sidebar:", xhr.responseText);
@@ -402,38 +412,23 @@
             });
         }
 
-        // Notification functions
 
-        function showNewCustomerNotification(data) {
-            // Tampilkan toast atau notification untuk customer baru
-            if (typeof toaster === 'function') {
-                toaster(`Pesan baru dari customer baru!`, 'info');
-            }
+        // Sidebar refresh
+        // function refreshChatSidebar() {
+        //     console.log("[AJAX] Refreshing chat sidebar...");
 
-            // // Bisa juga trigger desktop notification jika diizinkan
-            // if (Notification.permission === "granted") {
-            //     new Notification("Customer Baru", {
-            //         body: `Ada customer baru yang mengirim pesan`,
-            //         icon: "/path/to/icon.png"
-            //     });
-            // }
-        }
-
-        function showNewMessageNotification(data) {
-            // const currentCustomerId = $('.get-chat.active').attr('id');
-
-            // // Hanya tampilkan notifikasi jika bukan untuk chat yang sedang aktif
-            // if (data.customer_id != currentCustomerId) {
-            //     // Desktop notification
-            //     if (Notification.permission === "granted") {
-            //         new Notification("Pesan Baru", {
-            //             body: data.message.message.substring(0, 50) + (data.message.message.length > 50 ? '...' :
-            //                 ''),
-            //             icon: "/path/to/icon.png"
-            //         });
-            //     }
-            // }
-        }
+        //     $.ajax({
+        //         url: `/seller/customer/chat/sidebar`,
+        //         type: 'GET',
+        //         success: function(data) {
+        //             console.log("[AJAX] Sidebar updated successfully.");
+        //             $('.session-list').html(data);
+        //         },
+        //         error: function(xhr) {
+        //             console.error("[AJAX] Failed to refresh sidebar:", xhr.responseText);
+        //         }
+        //     });
+        // }
 
         // WebSocket error handling
         socket.on("connect_error", (err) => {
@@ -443,18 +438,20 @@
             console.error("[SOCKET ERROR] General error:", err);
         });
 
-        // Initialize existing customer IDs saat page load
-        $(document).ready(function() {
-            // Populate existing customers from sidebar
-            $('.get-chat').each(function() {
-                const customerId = $(this).attr('id');
-                if (customerId) {
-                    existingCustomerChats.add(customerId);
-                }
-            });
+        // $(document).ready(function() {
+        //     if (userId) {
+        //         getMessage(userId);
+        //     }
 
-            console.log('Existing customers:', Array.from(existingCustomerChats));
-        });
+        // });
+
+        // $(document).on('click', '.get-chat', function(e) {
+        //     $('.get-chat').removeClass('active');
+        //     $(this).addClass('active');
+        //     customerId = $(this).attr('id');
+        //     getMessage(customerId)
+
+        // });
 
         function getMessage(customerId, loader = true, page = null, scroll = true, append = false) {
 
@@ -476,10 +473,6 @@
                 },
                 success: function(response) {
                     $('.chat-message').html(response.chat);
-
-                    setTimeout(function() {
-                        initializeChatComponents();
-                    }, 100);
 
                     const $onlineStatus = $(".online-status, .user-status");
 
@@ -581,138 +574,5 @@
                 },
             })
         });
-
-        // Request notification permission saat page load
-        $(document).ready(function() {
-            if ("Notification" in window && Notification.permission === "default") {
-                Notification.requestPermission();
-            }
-        });
-
-        // Debug function untuk monitoring
-        function debugChatState() {
-            console.log('=== CHAT DEBUG INFO ===');
-            console.log('Existing customers:', Array.from(existingCustomerChats));
-            console.log('Active customer:', $('.get-chat.active').attr('id'));
-            console.log('Chat items count:', $('.get-chat').length);
-            console.log('========================');
-        }
-
-        // Expose debug function globally
-        window.debugChatState = debugChatState;
-
-        function initializeChatComponents() {
-            const templateBtn = document.querySelector('.template-message-btn');
-            const templateContainer = document.getElementById('templateMessagesContainer');
-            const templateItems = document.querySelectorAll('.template-message-item');
-            const textarea = document.querySelector('.chat-message-input');
-
-            // Toggle template container
-            if (templateBtn && templateContainer) {
-                templateBtn.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-
-                    templateContainer.classList.toggle('show');
-                    templateBtn.classList.toggle('active');
-
-                    // Scroll to bottom after template shows
-                    setTimeout(() => {
-                        scroll_bottom();
-                    }, 100);
-                });
-            }
-
-            // Handle template item clicks
-            templateItems.forEach(function(item) {
-                item.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    const message = this.getAttribute('data-message');
-
-                    if (textarea) {
-                        textarea.value = message;
-                        textarea.focus();
-
-                        // Auto resize textarea
-                        textarea.style.height = 'auto';
-                        textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
-                    }
-
-                    // Hide template container
-                    templateContainer.classList.remove('show');
-                    templateBtn.classList.remove('active');
-
-                    // Visual feedback
-                    this.style.transform = 'scale(0.95)';
-                    setTimeout(() => {
-                        this.style.transform = '';
-                    }, 150);
-
-                    // Scroll to bottom after template closes
-                    setTimeout(() => {
-                        scroll_bottom();
-                    }, 200);
-                });
-            });
-
-            // Close template when clicking outside
-            document.addEventListener('click', function(e) {
-                if (!templateBtn.contains(e.target) && !templateContainer.contains(e.target)) {
-                    templateContainer.classList.remove('show');
-                    templateBtn.classList.remove('active');
-
-                    // Scroll to bottom when template closes
-                    setTimeout(() => {
-                        scroll_bottom();
-                    }, 100);
-                }
-            });
-
-            // Auto resize textarea
-            if (textarea) {
-                textarea.addEventListener('input', function() {
-                    this.style.height = 'auto';
-                    this.style.height = Math.min(this.scrollHeight, 120) + 'px';
-
-                    // Scroll to bottom when textarea resizes
-                    setTimeout(() => {
-                        scroll_bottom();
-                    }, 50);
-                });
-            }
-
-            // Product attachment remove functionality
-            const removeBtn = document.querySelector('.remove-product-attachment');
-            if (removeBtn) {
-                removeBtn.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-
-                    const attachmentPreview = document.querySelector('.product-attachment-preview');
-                    if (attachmentPreview) {
-                        attachmentPreview.style.animation = 'fadeOut 0.3s ease-out';
-                        setTimeout(() => {
-                            attachmentPreview.remove();
-
-                            // Remove product_id from form
-                            const productIdInput = document.querySelector('input[name="product_id"]');
-                            if (productIdInput) {
-                                productIdInput.remove();
-                            }
-
-                            // Update URL untuk menghapus product_id parameter
-                            const url = new URL(window.location);
-                            url.searchParams.delete('product_id');
-                            window.history.replaceState({}, '', url);
-
-                            // Scroll to bottom after removing attachment
-                            setTimeout(() => {
-                                scroll_bottom();
-                            }, 100);
-                        }, 300);
-                    }
-                });
-            }
-        }
     </script>
 @endpush
