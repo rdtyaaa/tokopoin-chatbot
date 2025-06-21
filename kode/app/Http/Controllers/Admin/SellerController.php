@@ -139,7 +139,7 @@ class SellerController extends Controller
         $sellerShop->shop_first_image = $shop_first_image;
         $sellerShop->save();
 
-        
+
         return back()->with('success',translate('Seller shop status has been updated'));
     }
 
@@ -349,7 +349,7 @@ class SellerController extends Controller
             if($shop->shop_first_image)  remove_file(file_path()['shop_first_image']['path'],$shop->shop_first_image);
             $shop->delete();
             return true;
-       
+
         } catch (\Throwable $th) {return false;}
     }
 
@@ -406,7 +406,7 @@ class SellerController extends Controller
             try{
                 $seller->image = store_file($request->image, file_path()['profile']['seller']['path']);
             }catch (\Exception $exp){
-          
+
             }
         }
         $seller->save();

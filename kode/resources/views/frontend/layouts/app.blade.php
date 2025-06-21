@@ -169,7 +169,6 @@
 <body>
 
 
-
     @if (site_settings('preloader') == App\Enums\StatusEnum::true->status())
         <div class="preloader-wrapper">
             <canvas id="bg"></canvas>

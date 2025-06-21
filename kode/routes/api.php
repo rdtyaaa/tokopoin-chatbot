@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\PresenceController;
 use App\Http\Controllers\Api\WithdrawController;
 use App\Http\Controllers\Api\SellerChatController;
 use App\Http\Controllers\Api\DeliverymanChatController;
+use App\Http\Controllers\Api\WhatsAppWebhookController;
 
 /*
 |--------------------------------------------------------------------------
@@ -126,6 +127,16 @@ Route::group(['middleware' => ['api.lang','api.currency','sanitizer','maintenanc
     Route::get('payment/log/{trx_code}', [\App\Http\Controllers\Api\HomeController::class, 'getPaymentLog']);
 
     Route::get('products', [\App\Http\Controllers\Api\ProductController::class, 'products']);
+
+    Route::prefix('whatsapp')->group(function() {
+        // Main webhook endpoint for Fonnte
+        Route::post('/webhook', [WhatsAppWebhookController::class, 'handleWebhook'])
+            ->name('whatsapp.webhook');
+
+        // Health check endpoint
+        Route::get('/webhook/health', [WhatsAppWebhookController::class, 'healthCheck'])
+            ->name('whatsapp.webhook.health');
+    });
 
     /** new api */
     Route::get('shop', [\App\Http\Controllers\Api\HomeController::class, 'shop']);

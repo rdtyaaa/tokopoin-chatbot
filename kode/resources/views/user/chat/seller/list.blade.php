@@ -139,6 +139,15 @@
         const customerId = {{ auth()->id() }};
         const sellerIds = {!! json_encode($sellers->pluck('id')) !!};
 
+        let statusCheckTimeout;
+        let onlineUsersCache = new Set(); // Cache untuk mencegah request berulang
+        let lastSeenCache = new Map(); // Cache untuk last seen data
+        let requestInProgress = new Set(); // Track request yang sedang berlangsung
+
+        let heartbeatInterval;
+        let heartbeatTimeout;
+
+
         const socket = io("http://localhost:3000", {
             query: {
                 role: userRole,
@@ -146,15 +155,107 @@
             }
         });
 
+        function debouncedStatusCheck(userIds) {
+            clearTimeout(statusCheckTimeout);
+            statusCheckTimeout = setTimeout(() => {
+                checkOnlineStatus(userIds);
+            }, 500);
+        }
+
         socket.on("connect", () => {
             console.log("Connected to WebSocket as", userRole + '-' + customerId);
 
-            // Terima status online user lain (misalnya untuk update badge)
-            socket.on("all-users-online", function(userIds) {
-                console.log("[all-users-online] Event received:", userIds);
-                checkOnlineStatus(userIds);
-            });
+            // Request online users after connection is established
+            setTimeout(() => {
+                socket.emit("request-online-users");
+            }, 500);
+            startHeartbeat();
         });
+
+        socket.on('disconnect', (reason) => {
+            console.log('Disconnected:', reason);
+            // Clear caches on disconnect
+            onlineUsersCache.clear();
+            lastSeenCache.clear();
+            requestInProgress.clear();
+
+            if (reason === 'io server disconnect') {
+                socket.connect();
+            }
+            stopHeartbeat();
+        });
+
+        window.addEventListener('beforeunload', () => {
+            console.log('Page is being unloaded, disconnecting socket...');
+            socket.disconnect();
+        });
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                console.log('Tab hidden/minimized');
+            } else {
+                console.log('Tab visible again');
+                if (!socket.connected) {
+                    socket.connect();
+                }
+            }
+        });
+
+        window.addEventListener('pagehide', () => {
+            console.log('Page hidden, disconnecting socket...');
+            socket.disconnect();
+        });
+
+        function startHeartbeat() {
+            heartbeatInterval = setInterval(() => {
+                socket.emit('ping');
+
+                heartbeatTimeout = setTimeout(() => {
+                    console.log('Server heartbeat timeout, reconnecting...');
+                    socket.disconnect();
+                    socket.connect();
+                }, 10000); // 10 second timeout
+            }, 30000); // Send ping every 30 seconds
+        }
+
+        function stopHeartbeat() {
+            if (heartbeatInterval) {
+                clearInterval(heartbeatInterval);
+                heartbeatInterval = null;
+            }
+            if (heartbeatTimeout) {
+                clearTimeout(heartbeatTimeout);
+                heartbeatTimeout = null;
+            }
+        }
+
+        setInterval(() => {
+            socket.emit('ping');
+        }, 45000);
+
+        socket.on('pong', () => {
+            console.log('Connection alive');
+            // Clear timeout since server responded
+            if (heartbeatTimeout) {
+                clearTimeout(heartbeatTimeout);
+                heartbeatTimeout = null;
+            }
+        });
+
+        socket.on("all-users-online", function(userIds) {
+            console.log("[all-users-online] Event received:", userIds);
+
+            // Update cache
+            onlineUsersCache = new Set(userIds);
+
+            debouncedStatusCheck(userIds);
+        });
+
+        setInterval(() => {
+            if (socket.connected) {
+                socket.emit("request-online-users");
+            }
+        }, 60000);
 
         // Error handler WebSocket
         socket.on("connect_error", (err) => {
@@ -220,13 +321,21 @@
         // Fungsi notifikasi untuk pesan baru dari seller
         function showNewSellerMessageNotification(data) {
             const currentSellerId = $('.get-chat.active').attr('id');
-            const sellerName = data.seller_name || 'Seller';
+            let senderName = data.seller_name || 'Seller';
+
+            // Update nama untuk chatbot
+            if (data.message.sender_role === 'chatbot') {
+                senderName = `Chatbot (${senderName})`;
+            }
 
             // Hanya tampilkan notifikasi jika bukan untuk chat yang sedang aktif
             if (data.seller_id != currentSellerId) {
                 // Toaster notification
                 if (typeof toaster === 'function') {
-                    toaster(`Pesan baru dari ${sellerName}!`, 'info');
+                    const message = data.message.sender_role === 'chatbot' ?
+                        `Balasan otomatis dari ${senderName}` :
+                        `Pesan baru dari ${senderName}!`;
+                    toaster(message, 'info');
                 }
             }
         }
@@ -240,8 +349,9 @@
             const $item = $(`#${data.seller_id}`);
 
             if (data.seller_id == currentSellerId) {
-                if (data.message.sender_role == "seller") {
-                    updateMessage(data.message.message, data.message.created_at);
+                // PERBAIKAN: Handle semua jenis sender_role (seller & chatbot)
+                if (data.message.sender_role == "seller" || data.message.sender_role == "chatbot") {
+                    updateMessage(data.message.message, data.message.created_at, data.message.sender_role);
                 }
                 updateSidebar($item, data.message.message, data.message.created_at);
             } else {
@@ -254,25 +364,103 @@
                 }
                 $item.addClass('unread-message');
 
-                // Tampilkan notifikasi untuk pesan dari seller yang tidak aktif
-                if (data.message.sender_role == "seller") {
+                // Tampilkan notifikasi untuk pesan dari seller atau chatbot yang tidak aktif
+                if (data.message.sender_role == "seller" || data.message.sender_role == "chatbot") {
                     showNewSellerMessageNotification(data);
                 }
             }
         });
 
-        function updateMessage(messageText, createdAt) {
-            const $lastMsg = $('.messages .message-left').last();
-            const $newMsg = $lastMsg.clone();
+        function updateMessage(messageText, createdAt, senderRole = 'seller') {
+            console.log('updateMessage called with:', {
+                messageText,
+                createdAt,
+                senderRole
+            });
+
+            // Clone dari message terakhir yang tepat berdasarkan sender_role
+            let $templateMsg;
+
+            if (senderRole === 'chatbot') {
+                // Cari template chatbot message, atau fallback ke seller message
+                $templateMsg = $('.messages .message-left').filter(function() {
+                    return $(this).find('.chatbot-name').length > 0;
+                }).last();
+
+                // Jika tidak ada template chatbot, buat structure baru
+                if ($templateMsg.length === 0) {
+                    $templateMsg = $('.messages .message-left').last();
+                }
+            } else {
+                // Untuk seller, cari message seller (bukan chatbot)
+                $templateMsg = $('.messages .message-left').filter(function() {
+                    return $(this).find('.chatbot-name').length === 0;
+                }).last();
+            }
+
+            // Fallback jika tidak ada template
+            if ($templateMsg.length === 0) {
+                $templateMsg = $('.messages .message-left').last();
+            }
+
+            const $newMsg = $templateMsg.clone();
 
             // Update isi pesan dan waktu
-            $newMsg.find('p').text(messageText);
+            $newMsg.find('.message-body p').text(messageText);
             $newMsg.find('.message-time span').text(formatTime(createdAt));
+
+            // PERBAIKAN: Update sender info berdasarkan role
+            if (senderRole === 'chatbot') {
+                // Pastikan struktur chatbot benar
+                const $userArea = $newMsg.find('.user-area');
+                const $meta = $userArea.find('.meta h6');
+
+                if ($meta.length > 0) {
+                    // Update nama menjadi chatbot
+                    $meta.html('<span class="chatbot-name"><i class="bi bi-robot"></i> Chatbot - Assistant</span>');
+                }
+
+                // Tambahkan chatbot indicator jika belum ada
+                const $messageBody = $newMsg.find('.message-body');
+                if ($messageBody.find('.chatbot-indicator').length === 0) {
+                    $messageBody.prepend(`
+                <div class="chatbot-indicator mb-1">
+                    <small class="text-muted">
+                        <i class="bi bi-cpu"></i> Automated Response
+                    </small>
+                </div>
+            `);
+                }
+
+                // Tambahkan class chatbot-message
+                $messageBody.addClass('chatbot-message');
+
+                // Update avatar menjadi chatbot avatar
+                const $avatar = $newMsg.find('.user-area .image img');
+                if ($avatar.length > 0) {
+                    $avatar.attr('src', '/assets/images/chatbot-avatar.jpg');
+                }
+            } else {
+                // Untuk seller, pastikan tidak ada elemen chatbot
+                $newMsg.find('.chatbot-indicator').remove();
+                $newMsg.find('.message-body').removeClass('chatbot-message');
+
+                // Pastikan nama seller benar (tidak berubah jadi chatbot)
+                const $meta = $newMsg.find('.user-area .meta h6');
+                if ($meta.find('.chatbot-name').length > 0) {
+                    // Reset ke seller name - ambil dari data original
+                    const sellerName = $('.seller-store h5').text().trim();
+                    $meta.text(sellerName);
+                }
+            }
+
+            // Remove check icon (karena ini dari seller/chatbot, bukan customer)
+            $newMsg.find('.check-message-icon').remove();
 
             // Tambahkan ke elemen chat
             $('.messages').append($newMsg);
-            scroll_bottom()
-        }
+            scroll_bottom();
+        };
 
         function updateSidebar($item, message, createdAt) {
             // Update preview pesan
@@ -314,11 +502,29 @@
 
         socket.on("user-online-status", function(data) {
             console.log("[user-online-status] Event received:", data);
-            const [role, id] = data.user_id.split("-");
+
+            // Parse the user_id to get role and id
+            const parts = data.user_id.split("-");
+            if (parts.length < 2) return; // Invalid format
+
+            const role = parts[0];
+            const id = parts.slice(1).join("-"); // Handle cases where ID might contain dashes
+
+            const globalUserId = `${role}-${id}`;
+            if (data.online) {
+                onlineUsersCache.add(globalUserId);
+                lastSeenCache.delete(globalUserId); // Clear last seen for online users
+            } else {
+                onlineUsersCache.delete(globalUserId);
+                if (data.last_seen) {
+                    lastSeenCache.set(globalUserId, data.last_seen);
+                }
+            }
+
             const selectors =
                 `.online-status[data-role="${role}"][data-id="${id}"], .user-status[data-role="${role}"][data-id="${id}"]`;
-
             const $targets = $(selectors);
+
             $targets.each(function() {
                 updateStatusElement($(this), data.online, data.last_seen);
             });
@@ -335,9 +541,33 @@
                 if (onlineSet.has(globalUserId)) {
                     updateStatusElement($(this), true);
                 } else {
-                    $.get(`/api/user-last-seen?role=${role}&id=${id}`, (res) => {
-                        updateStatusElement($(this), false, res.last_seen);
-                    });
+                    if (lastSeenCache.has(globalUserId)) {
+                        updateStatusElement($(this), false, lastSeenCache.get(globalUserId));
+                        return;
+                    }
+
+                    const requestKey = `${role}-${id}`;
+                    if (requestInProgress.has(requestKey)) {
+                        console.log(`Request already in progress for ${requestKey}`);
+                        return;
+                    }
+
+                    requestInProgress.add(requestKey);
+
+                    // Only make API call if not in online set and not cached
+                    $.get(`/api/user-last-seen?role=${role}&id=${id}`)
+                        .done((res) => {
+                            // Cache the result
+                            lastSeenCache.set(globalUserId, res.last_seen);
+                            updateStatusElement($(this), false, res.last_seen);
+                        })
+                        .fail(() => {
+                            updateStatusElement($(this), false, null);
+                        })
+                        .always(() => {
+                            // Remove from in-progress tracking
+                            requestInProgress.delete(requestKey);
+                        });
                 }
             });
         }
@@ -389,7 +619,7 @@
                 url = url + '?page=' + page
             }
 
-            // Add product_id to URL if exists
+            // Add product_id to URL if exists - PERBAIKAN
             const urlParams = new URLSearchParams(window.location.search);
             const productId = urlParams.get('product_id');
             if (productId) {
@@ -413,16 +643,9 @@
                         initializeChatComponents();
                     }, 100);
 
-                    // Check online status
-                    const $onlineStatus = $(".online-status, .user-status");
-                    if ($onlineStatus.length > 0) {
-                        const userIds = [];
-                        $onlineStatus.each(function() {
-                            const role = $(this).data("role");
-                            const id = $(this).data("id");
-                            userIds.push(`${role}-${id}`);
-                        });
-                        checkOnlineStatus(userIds);
+                    // PERBAIKAN: Request online users setelah chat dimuat
+                    if (socket.connected) {
+                        socket.emit("request-online-users");
                     }
 
                     if (scroll) {

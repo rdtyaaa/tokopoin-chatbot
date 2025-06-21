@@ -16,43 +16,94 @@
 
         <div class="messages">
             @forelse ($messages as $message)
-
                 @php
-                    $positionClass = $message->sender_role == 'seller' ? 'message-left' : 'message-right';
+                    // Update position class untuk handle chatbot
+                    // Chatbot dan seller di kiri, customer di kanan
+                    $positionClass =
+                        $message->sender_role == 'seller' || $message->sender_role == 'chatbot'
+                            ? 'message-left'
+                            : 'message-right';
 
-                    $imgURL =
-                        $message->sender_role == 'seller'
-                            ? show_image(
-                                (file_path()['profile']['seller']['path'] ?? '') .
-                                    '/' .
-                                    ($message->seller->image ?? ''),
-                                file_path()['profile']['seller']['size'] ?? '',
-                            )
-                            : show_image(
-                                (file_path()['profile']['user']['path'] ?? '') .
-                                    '/' .
-                                    ($message->customer->image ?? ''),
-                                file_path()['profile']['user']['size'] ?? '',
-                            );
+                    // Update image URL untuk chatbot
+                    if ($message->sender_role == 'chatbot') {
+                        $imgURL = asset('assets/images/chatbot-avatar.jpg'); // Atau default chatbot image
+                    } else {
+                        $imgURL =
+                            $message->sender_role == 'seller'
+                                ? show_image(
+                                    (file_path()['profile']['seller']['path'] ?? '') .
+                                        '/' .
+                                        ($message->seller->image ?? ''),
+                                    file_path()['profile']['seller']['size'] ?? '',
+                                )
+                                : show_image(
+                                    (file_path()['profile']['user']['path'] ?? '') .
+                                        '/' .
+                                        ($message->customer->image ?? ''),
+                                    file_path()['profile']['user']['size'] ?? '',
+                                );
+                    }
                 @endphp
 
                 <div class="message-single {{ $positionClass }} d-flex flex-column">
-                    <div
-                        class="user-area d-inline-flex @if ($message->sender_role != 'seller') justify-content-end @endif align-items-center mb-2 gap-3">
-                        <div class="image">
-                            <img src="{{ $imgURL }}" alt="profile.jpg">
+                    {{-- User area untuk customer (kanan) --}}
+                    @if ($message->sender_role == 'customer')
+                        <div class="user-area d-inline-flex justify-content-end align-items-center mb-2 gap-3">
+                            <div class="meta order-1">
+                                <h6 class="text-end">{{ $message->customer->name }}</h6>
+                            </div>
+                            <div class="image order-2">
+                                <img src="{{ $imgURL }}" alt="profile.jpg">
+                            </div>
                         </div>
-                        <div class="meta">
-                            <h6>
-                                @if ($message->sender_role == 'seller')
-                                    {{ $message->seller->name . ' ' . $message->seller->last_name }}
-                                @else
-                                    {{ $message->customer->name }}
-                                @endif
-                            </h6>
+                    @else
+                        {{-- User area untuk seller & chatbot (kiri) --}}
+                        <div class="user-area d-inline-flex align-items-center mb-2 gap-3">
+                            <div class="image">
+                                <img src="{{ $imgURL }}" alt="profile.jpg">
+                            </div>
+                            <div class="meta">
+                                <h6>
+                                    @if ($message->sender_role == 'seller')
+                                        {{ $message->seller->name . ' ' . $message->seller->last_name }}
+                                    @elseif ($message->sender_role == 'chatbot')
+                                        <span class="chatbot-name">
+                                            <i class="bi bi-robot"></i>
+                                            {{ translate('Chatbot') }} -
+                                            {{ $message->seller->sellerShop->shop_name ?? 'Assistant' }}
+                                        </span>
+                                    @endif
+                                </h6>
+                            </div>
                         </div>
-                    </div>
-                    <div class="message-body">
+                    @endif
+
+                    <div class="message-body @if ($message->sender_role == 'chatbot') chatbot-message @endif">
+                        {{-- Check icon untuk customer messages --}}
+                        @if ($message->sender_role == 'customer')
+                            <span class="text-success check-message-icon">
+                                <i
+                                    class="bi bi-check2{{ $message->is_seen == App\Enums\StatusEnum::true->status() ? '-all' : '' }}"></i>
+                            </span>
+                        @endif
+
+                        {{-- Chatbot indicator --}}
+                        @if ($message->sender_role == 'chatbot')
+                            <div class="chatbot-indicator mb-1">
+                                <small class="text-muted">
+                                    <i class="bi bi-cpu"></i> {{ translate('Automated Response') }}
+                                </small>
+                            </div>
+                        @endif
+
+                        @if ($message->source == 'whatsapp')
+                            <div class="whatsapp-indicator mb-1">
+                                <small class="text-success">
+                                    <i class="bi bi-whatsapp"></i> {{ translate('WhatsApp') }}
+                                </small>
+                            </div>
+                        @endif
+
                         <p>{{ $message->message }}</p>
 
                         @if ($message->files)
@@ -88,13 +139,6 @@
                         <div class="message-time">
                             <span>{{ $message->created_at->format('H:i') }}</span>
                         </div>
-
-                        @if ($message->sender_role != 'seller')
-                            <span class="text-success check-message-icon">
-                                <i
-                                    class="bi bi-check2{{ $message->is_seen == App\Enums\StatusEnum::true->status() ? '-all' : '' }}"></i>
-                            </span>
-                        @endif
                     </div>
                 </div>
 
@@ -233,6 +277,7 @@
         --text-primary: #fff !important;
         --primary-light: rgba(228, 0, 70, 0.05) !important;
         --secondary-light: rgba(9, 73, 102, 0.2) !important;
+        --chatbot-light: rgba(108, 99, 255, 0.1);
     }
 
     /* Template Message Container */
@@ -534,6 +579,80 @@
         text-decoration: none;
     }
 
+    .chatbot-message {
+        background-color: #f8f9fa;
+    }
+
+    .chatbot-name {
+        color: #007bff;
+        font-weight: 600;
+    }
+
+    .chatbot-indicator {
+        font-size: 0.75rem;
+        color: #6c757d;
+    }
+
+    .chatbot-indicator small {
+        color: #007bff !important;
+        font-weight: 500;
+        font-size: 11px;
+        background: var(--chatbot-light);
+        padding: 2px 6px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        gap: 3px;
+    }
+
+    .chatbot-indicator i {
+        font-size: 10px;
+        animation: spin 3s linear infinite;
+    }
+
+    .chatbot-message p {
+        margin-bottom: 0.5rem;
+    }
+
+    .whatsapp-indicator {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .whatsapp-message {
+        border-left: 3px solid #25D366 !important;
+        background: rgba(37, 211, 102, 0.02) !important;
+    }
+
+    .whatsapp-indicator small {
+        color: #25D366 !important;
+        font-weight: 500;
+        font-size: 11px;
+        background: rgba(37, 211, 102, 0.1);
+        padding: 2px 6px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        gap: 3px;
+    }
+
+    .whatsapp-indicator i {
+        font-size: 10px;
+    }
+
+    .whatsapp-indicator small,
+    .chatbot-indicator small {
+        font-size: 10px;
+        padding: 1px 4px;
+    }
+
+    /* Message body styling for WhatsApp messages */
+    .message-body.whatsapp-message {
+        border-left: 3px solid #25D366;
+        background: rgba(37, 211, 102, 0.02);
+    }
+
     /* Animations */
     @keyframes slideIn {
         from {
@@ -558,6 +677,17 @@
             transform: translateY(-10px);
         }
     }
+
+    @keyframes spin {
+        from {
+            transform: rotate(0deg);
+        }
+
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
 
     /* Responsive Design */
     @media (max-width: 768px) {
@@ -611,5 +741,17 @@
         color: var(--primary);
         font-weight: 500;
         font-size: 12px;
+    }
+
+    /* Customer message alignment fixes */
+    .message-right .user-area .meta h6 {
+        text-align: right;
+    }
+
+    @media (max-width: 768px) {
+        .whatsapp-indicator small {
+            font-size: 10px;
+            padding: 1px 4px;
+        }
     }
 </style>

@@ -16,13 +16,13 @@ class CreateCustomerSellerConversationsTable extends Migration
         Schema::create('customer_seller_conversations', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('customer_id');
-            $table->unsignedBigInteger('seller_id');
+            $table->unsignedBigInteger('seller_id')->nullable();
             $table->enum('sender_role', ['customer', 'seller']);
             $table->text('message');
             $table->text('files')->nullable();
             $table->boolean('is_seen')->default(false);
             $table->timestamps();
-    
+
         });
     }
 
