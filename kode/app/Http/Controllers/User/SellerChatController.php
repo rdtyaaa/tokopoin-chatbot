@@ -79,7 +79,6 @@ class SellerChatController extends Controller
             ];
         }
 
-        // PERBAIKAN: Mark pesan sebagai seen untuk seller DAN chatbot
         $updatedCount = CustomerSellerConversation::with(['customer', 'customer.country', 'seller', 'seller.sellerShop'])
             ->latest()
             ->where('seller_id', $seller_id)
@@ -88,27 +87,11 @@ class SellerChatController extends Controller
             ->where('is_seen', 0)
             ->update(['is_seen' => 1]);
 
-        Log::info('Messages marked as seen', [
-            'seller_id' => $seller_id,
-            'customer_id' => $this->user->id,
-            'updated_count' => $updatedCount,
-        ]);
-
-        // PERBAIKAN: Load messages dengan relasi lengkap
         $messages = CustomerSellerConversation::with(['customer', 'customer.country', 'seller', 'seller.sellerShop'])
             ->where('seller_id', $seller_id)
             ->where('customer_id', $this->user->id)
             ->orderBy('created_at', 'asc') // Pastikan urutan chronological
             ->get();
-
-        Log::info('Messages loaded for chat', [
-            'seller_id' => $seller_id,
-            'customer_id' => $this->user->id,
-            'message_count' => $messages->count(),
-            'chatbot_messages' => $messages->where('sender_role', 'chatbot')->count(),
-            'seller_messages' => $messages->where('sender_role', 'seller')->count(),
-            'customer_messages' => $messages->where('sender_role', 'customer')->count(),
-        ]);
 
         return [
             'status' => true,
@@ -118,6 +101,9 @@ class SellerChatController extends Controller
 
     public function sendMessage(Request $request): array
     {
+        // Catat waktu mulai
+        $startTime = microtime(true);
+
         try {
             $request->validate([
                 'seller_id' => 'required|exists:sellers,id',
@@ -158,40 +144,79 @@ class SellerChatController extends Controller
 
             $message->save();
 
+            // Catat waktu setelah save message
+            $messageSavedTime = microtime(true);
+            $saveMessageDuration = round(($messageSavedTime - $startTime) * 1000, 2); // dalam milidetik
+
             event(new NewMessageSent($message, $this->user->id, $request->input('seller_id')));
             Log::info('Sending NewMessageSent event', [
                 'seller_id' => $request->input('seller_id'),
                 'customer_id' => $this->user->id,
             ]);
 
+            // Catat waktu sebelum WhatsApp notification
+            $beforeWhatsAppTime = microtime(true);
+
             try {
                 $whatsappService = app(WhatsAppService::class);
                 $customerName = $this->user->name ?? 'Customer';
 
-                $whatsappService->notifyNewMessage(
-                    $request->input('seller_id'),
-                    $customerName,
-                    $request->input('message')
-                );
+                $whatsappService->notifyNewMessage($request->input('seller_id'), $customerName, $request->input('message'));
+
+                // Catat waktu setelah WhatsApp notification berhasil
+                $afterWhatsAppTime = microtime(true);
+                $whatsappDuration = round(($afterWhatsAppTime - $beforeWhatsAppTime) * 1000, 2); // dalam milidetik
+                $totalDuration = round(($afterWhatsAppTime - $startTime) * 1000, 2); // total durasi dalam milidetik
 
                 Log::info('WhatsApp notification sent for new customer message', [
                     'seller_id' => $request->input('seller_id'),
                     'customer_id' => $this->user->id,
                     'customer_name' => $customerName,
+                    'timing' => [
+                        'save_message_duration_ms' => $saveMessageDuration,
+                        'whatsapp_duration_ms' => $whatsappDuration,
+                        'total_duration_ms' => $totalDuration,
+                        'total_duration_seconds' => round($totalDuration / 1000, 3),
+                    ],
                 ]);
             } catch (\Exception $e) {
+                $errorTime = microtime(true);
+                $errorDuration = round(($errorTime - $startTime) * 1000, 2);
+
                 Log::error('Error sending WhatsApp notification for new message', [
                     'seller_id' => $request->input('seller_id'),
                     'customer_id' => $this->user->id,
                     'error' => $e->getMessage(),
+                    'timing' => [
+                        'save_message_duration_ms' => $saveMessageDuration,
+                        'error_duration_ms' => $errorDuration,
+                        'error_duration_seconds' => round($errorDuration / 1000, 3),
+                    ],
                 ]);
             }
 
-            // TAMBAHKAN LOGIC CHATBOT DI SINI
             $this->triggerChatbotIfNeeded($request->input('seller_id'), $request->input('message'), $request->input('product_id'));
+            $endTime = microtime(true);
+            $totalProcessDuration = round(($endTime - $startTime) * 1000, 2);
+
+            Log::info('SendMessage process completed', [
+                'seller_id' => $request->input('seller_id'),
+                'customer_id' => $this->user->id,
+                'total_process_duration_ms' => $totalProcessDuration,
+                'total_process_duration_seconds' => round($totalProcessDuration / 1000, 3),
+            ]);
 
             return ['status' => true, 'seller_id' => $seller->id];
         } catch (\Exception $ex) {
+            $errorTime = microtime(true);
+            $errorDuration = round(($errorTime - $startTime) * 1000, 2);
+
+            Log::error('SendMessage failed', [
+                'error' => $ex->getMessage(),
+                'duration_ms' => $errorDuration,
+                'duration_seconds' => round($errorDuration / 1000, 3),
+            ]);
+
             return ['status' => false, 'message' => $ex->getMessage()];
         }
     }
@@ -200,8 +225,7 @@ class SellerChatController extends Controller
     {
         try {
             if ($this->chatbotService->shouldTriggerChatbot($sellerId, $this->user->id)) {
-                // Dispatch job untuk proses async
-                ProcessChatbotResponse::dispatch($this->user->id, $sellerId, $message, $productId)->delay(now()->addSeconds(2)); // Delay 2 detik sebelum chatbot merespon
+                ProcessChatbotResponse::dispatch($this->user->id, $sellerId, $message, $productId)->delay(now()->addSeconds(2));
 
                 Log::info('Chatbot triggered for seller: ' . $sellerId);
             }

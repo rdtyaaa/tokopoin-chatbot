@@ -186,7 +186,6 @@
         });
 
         window.addEventListener('beforeunload', () => {
-            console.log('Page is being unloaded, disconnecting socket...');
             socket.disconnect();
         });
 
@@ -202,7 +201,6 @@
         });
 
         window.addEventListener('pagehide', () => {
-            console.log('Page hidden, disconnecting socket...');
             socket.disconnect();
         });
 
@@ -211,11 +209,10 @@
                 socket.emit('ping');
 
                 heartbeatTimeout = setTimeout(() => {
-                    console.log('Server heartbeat timeout, reconnecting...');
                     socket.disconnect();
                     socket.connect();
-                }, 10000); // 10 second timeout
-            }, 30000); // Send ping every 30 seconds
+                }, 10000);
+            }, 30000);
         }
 
         function stopHeartbeat() {
@@ -234,8 +231,6 @@
         }, 45000);
 
         socket.on('pong', () => {
-            console.log('Connection alive');
-            // Clear timeout since server responded
             if (heartbeatTimeout) {
                 clearTimeout(heartbeatTimeout);
                 heartbeatTimeout = null;
@@ -243,9 +238,6 @@
         });
 
         socket.on("all-users-online", function(userIds) {
-            console.log("[all-users-online] Event received:", userIds);
-
-            // Update cache
             onlineUsersCache = new Set(userIds);
 
             debouncedStatusCheck(userIds);
@@ -257,7 +249,6 @@
             }
         }, 60000);
 
-        // Error handler WebSocket
         socket.on("connect_error", (err) => {
             console.error("WebSocket connection error:", err.message);
         });
@@ -274,29 +265,21 @@
                 }
             });
 
-            console.log('Existing customers:', Array.from(existingCustomerChats));
-
             if (customerId) {
-                console.log(`[DOC READY] customerId found in query: ${customerId}, joining room`);
-
-                // Set active class pada sidebar sebelum load message
                 setTimeout(function() {
                     $('.get-chat').removeClass('active');
                     const $targetCustomer = $(`.get-chat#${customerId}`);
                     if ($targetCustomer.length > 0) {
                         $targetCustomer.addClass('active');
-                        console.log(`Set active class for customer: ${customerId}`);
                     } else {
-                        console.warn(`Customer with ID ${customerId} not found in sidebar`);
                         setTimeout(function() {
                             const $retryTargetCustomer = $(`.get-chat#${customerId}`);
                             if ($retryTargetCustomer.length > 0) {
                                 $('.get-chat').removeClass('active');
                                 $retryTargetCustomer.addClass('active');
-                                console.log(
-                                    `Set active class for customer after retry: ${customerId}`);
                             }
-                        }, 500);
+                            500
+                        });
                     }
                 }, 100);
 
@@ -307,10 +290,6 @@
         function joinRoom(customerId) {
             const sellerRoom = `chat-channel.seller.${sellerId}`;
             socket.emit("join", sellerRoom);
-            console.log(`[SOCKET] Seller joining seller room: ${sellerRoom}`);
-            // const room = `chat-channel.customer.${customerId}`;
-            // console.log(`[SOCKET] Seller joining room: ${room}`);
-            // socket.emit("join", room);
         }
 
         try {
@@ -335,11 +314,7 @@
             if (!existingCustomerChats.has(customerId)) {
                 existingCustomerChats.add(customerId);
                 joinRoom(customerId);
-
-                console.log('Existing customers get chat:', Array.from(existingCustomerChats));
             }
-
-            console.log('Existing customers:', Array.from(existingCustomerChats));
 
             getMessage(customerId, false, null, true, false);
         });
@@ -347,33 +322,21 @@
         // Notifikasi untuk customer baru
         socket.on("notify-new-chat", (data) => {
             const customerId = String(data.customer_id);
-            console.log(
-                `[NOTIFY] customerId:`, customerId, typeof customerId,
-                ` | existing:`, Array.from(existingCustomerChats)
-            );
-
 
             if (!existingCustomerChats.has(customerId)) {
-                console.log(`[NOTIFY] New customer detected: ${customerId}`);
-
                 joinRoom(customerId);
                 existingCustomerChats.add(customerId);
                 refreshChatSidebar();
 
                 showNewCustomerNotification(data);
-            } else {
-                console.log(`[NOTIFY] Existing customer: ${customerId} - ignoring notify event`);
             }
         });
 
-        // Fungsi notifikasi untuk pesan baru dari customer
         function showNewCustomerMessageNotification(data) {
             const currentCustomerId = $('.get-chat.active').attr('id');
             let senderName = data.customer_name || 'Customer';
 
-            // Hanya tampilkan notifikasi jika bukan untuk chat yang sedang aktif
             if (data.customer_id != currentCustomerId) {
-                // Toaster notification
                 if (typeof toaster === 'function') {
                     const message = `Pesan baru dari ${senderName}!`;
                     toaster(message, 'info');
@@ -381,32 +344,21 @@
             }
         }
 
-        // Terima pesan baru dari WebSocket
         socket.on("new-message", function(data) {
-            console.log("New message received:", data);
-
             const currentCustomerId = $('.get-chat.active').attr('id');
-            console.log("Current Customer Id:", currentCustomerId);
             const customerId = data.customer_id;
             const $item = $(`#${customerId}`);
-
-            console.log(`[MESSAGE] New message from customer: ${customerId}`);
 
             if (!existingCustomerChats.has(customerId)) {
                 existingCustomerChats.add(customerId);
             }
 
             if (customerId == currentCustomerId) {
-                console.log('[MESSAGE] Message for active chat');
-
-                // Handle pesan dari customer
                 if (data.message.sender_role == "customer") {
                     updateMessage(data.message.message, data.message.created_at, data.message.sender_role);
                 }
                 updateSidebar($item, data.message.message, data.message.created_at);
             } else {
-                console.log('[MESSAGE] Message for inactive chat');
-
                 updateSidebar($item, data.message.message, data.message.created_at);
 
                 if ($item.find('.message-num').length === 0) {
@@ -416,7 +368,6 @@
                 }
                 $item.addClass('unread-message');
 
-                // Tampilkan notifikasi untuk pesan dari customer yang tidak aktif
                 if (data.message.sender_role == "customer") {
                     showNewCustomerMessageNotification(data);
                 }
@@ -424,55 +375,38 @@
         });
 
         function updateMessage(messageText, createdAt, senderRole = 'customer') {
-            console.log('updateMessage called with:', {
-                messageText,
-                createdAt,
-                senderRole
-            });
-
-            // Clone dari message terakhir customer
             const $templateMsg = $('.messages .message-left').last();
             const $newMsg = $templateMsg.clone();
 
-            // Update isi pesan dan waktu
             $newMsg.find('.message-body p').text(messageText);
             $newMsg.find('.message-time span').text(formatTime(createdAt));
 
-            // Remove check icon (karena ini dari customer, bukan seller)
             $newMsg.find('.check-message-icon').remove();
 
-            // Tambahkan ke elemen chat
             $('.messages').append($newMsg);
             scroll_bottom();
         }
 
         function updateSidebar($item, message, createdAt) {
-            // Update preview pesan
             $item.find('p').text(message);
 
-            // Update waktu
             const formattedTime = formatTime(createdAt);
             $item.find('.time').text(formattedTime);
         }
 
         function refreshChatSidebar() {
-            console.log("Refreshing chat sidebar...");
-
-            const activeId = $('.get-chat.active').attr('id'); // Simpan ID yg aktif
+            const activeId = $('.get-chat.active').attr('id');
 
             $.ajax({
                 url: `/seller/customer/chat/sidebar`,
                 type: 'GET',
                 success: function(data) {
-                    console.log("Sidebar updated.");
                     $('.session-list').html(data);
 
-                    // Restore active class setelah sidebar di-refresh
                     if (activeId) {
                         const restoredElement = $(`.get-chat#${activeId}`);
                         if (restoredElement.length) {
                             restoredElement.addClass('active');
-                            console.log(`Restored active chat to ID: ${activeId}`);
                         } else {
                             console.warn(`Active ID ${activeId} not found after refresh.`);
                         }
@@ -499,19 +433,16 @@
         }
 
         socket.on("user-online-status", function(data) {
-            console.log("[user-online-status] Event received:", data);
-
-            // Parse the user_id to get role and id
             const parts = data.user_id.split("-");
-            if (parts.length < 2) return; // Invalid format
+            if (parts.length < 2) return;
 
             const role = parts[0];
-            const id = parts.slice(1).join("-"); // Handle cases where ID might contain dashes
+            const id = parts.slice(1).join("-");
 
             const globalUserId = `${role}-${id}`;
             if (data.online) {
                 onlineUsersCache.add(globalUserId);
-                lastSeenCache.delete(globalUserId); // Clear last seen for online users
+                lastSeenCache.delete(globalUserId);
             } else {
                 onlineUsersCache.delete(globalUserId);
                 if (data.last_seen) {
@@ -546,7 +477,6 @@
 
                     const requestKey = `${role}-${id}`;
                     if (requestInProgress.has(requestKey)) {
-                        console.log(`Request already in progress for ${requestKey}`);
                         return;
                     }
 
@@ -612,7 +542,8 @@
         }
 
         function getMessage(customerId, loader = true, page = null, scroll = true, append = false) {
-            var url = "{{ route('seller.customer.chat.message', ':customer_id') }}".replace(':customer_id', customerId);
+            var url = "{{ route('seller.customer.chat.message', ':customer_id') }}".replace(':customer_id',
+                customerId);
             if (page) {
                 url = url + '?page=' + page
             }
@@ -787,33 +718,17 @@
 
         // Notification functions
         function showNewCustomerNotification(data) {
-            // Tampilkan toast atau notification untuk customer baru
             if (typeof toaster === 'function') {
                 toaster(`Pesan baru dari customer baru!`, 'info');
             }
         }
 
-        // Request notification permission saat page load
         $(document).ready(function() {
             if ("Notification" in window && Notification.permission === "default") {
                 Notification.requestPermission();
             }
         });
 
-        // Debug function untuk monitoring
-        function debugChatState() {
-            console.log('=== CHAT DEBUG INFO ===');
-            console.log('Existing customers:', Array.from(existingCustomerChats));
-            console.log('Active customer:', $('.get-chat.active').attr('id'));
-            console.log('Chat items count:', $('.get-chat').length);
-            console.log('========================');
-        }
-
-        // Expose debug function globally
-        window.debugChatState = debugChatState;
-
-        // MESSAGE SCRIPT
-        // Fungsi utama untuk inisialisasi semua komponen chat
         function initializeChatComponents() {
             const templateBtn = document.querySelector('.template-message-btn');
             const templateContainer = document.getElementById('templateMessagesContainer');
@@ -959,18 +874,13 @@
 
         socket.on("notify-new-chat", (data) => {
             const customerId = data.customer_id;
-            console.log(`[NOTIFY] New chat notification for customer: ${customerId}`);
-
             if (!existingCustomerChats.has(customerId)) {
-                console.log(`[NOTIFY] New customer detected: ${customerId}`);
 
                 joinRoom(customerId);
                 existingCustomerChats.add(customerId);
                 refreshChatSidebar();
 
                 showNewCustomerNotification(data);
-            } else {
-                console.log(`[NOTIFY] Existing customer: ${customerId} - ignoring notify event`);
             }
         });
 
@@ -979,22 +889,17 @@
             const currentCustomerId = $('.get-chat.active').attr('id');
             const customerId = data.customer_id;
             const $item = $(`#${customerId}`);
-
-            console.log(`[MESSAGE] New message from customer: ${customerId}`);
-
             if (!existingCustomerChats.has(customerId)) {
                 existingCustomerChats.add(customerId);
             }
 
             if (customerId == currentCustomerId) {
-                console.log('[MESSAGE] Message for active chat');
 
                 if (data.message.sender_role == "customer") {
                     updateMessage(data.message.message, data.message.created_at);
                 }
                 updateSidebar($item, data.message.message, data.message.created_at);
             } else {
-                console.log('[MESSAGE] Message for inactive chat');
 
                 updateSidebar($item, data.message.message, data.message.created_at);
 
@@ -1048,7 +953,6 @@
             });
         }
 
-        // Helper function untuk check online status
         function checkOnlineStatusForAllUsers() {
             const userIds = [];
             $(".online-status, .user-status").each(function() {
@@ -1105,14 +1009,10 @@
         }
 
         function refreshChatSidebar() {
-            console.log("Refreshing chat sidebar...");
-
             $.ajax({
                 url: `/seller/customer/chat/sidebar`,
                 type: 'GET',
                 success: function(data) {
-                    console.log("Sidebar data fetched.");
-
                     const $sessionList = $('.session-list');
 
                     const previousCustomers = new Set(existingCustomerChats);
@@ -1152,9 +1052,6 @@
 
                     const newCustomers = Array.from(existingCustomerChats).filter(id => !previousCustomers.has(
                         id));
-                    if (newCustomers.length > 0) {
-                        console.log('New customers added:', newCustomers);
-                    }
 
                     checkOnlineStatusForAllUsers();
                 },
@@ -1164,37 +1061,21 @@
             });
         }
 
-        // Notification functions
-
         function showNewCustomerNotification(data) {
             // Tampilkan toast atau notification untuk customer baru
             if (typeof toaster === 'function') {
                 toaster(`Pesan baru dari customer baru!`, 'info');
             }
-
-            // // Bisa juga trigger desktop notification jika diizinkan
-            // if (Notification.permission === "granted") {
-            //     new Notification("Customer Baru", {
-            //         body: `Ada customer baru yang mengirim pesan`,
-            //         icon: "/path/to/icon.png"
-            //     });
-            // }
         }
 
         function showNewMessageNotification(data) {
-            // const currentCustomerId = $('.get-chat.active').attr('id');
+            const currentCustomerId = $('.get-chat.active').attr('id');
 
-            // // Hanya tampilkan notifikasi jika bukan untuk chat yang sedang aktif
-            // if (data.customer_id != currentCustomerId) {
-            //     // Desktop notification
-            //     if (Notification.permission === "granted") {
-            //         new Notification("Pesan Baru", {
-            //             body: data.message.message.substring(0, 50) + (data.message.message.length > 50 ? '...' :
-            //                 ''),
-            //             icon: "/path/to/icon.png"
-            //         });
-            //     }
-            // }
+            if (data.customer_id != currentCustomerId) {
+                if (typeof toaster === 'function') {
+                toaster(`Ada pesan baru baru!`, 'info');
+            }
+            }
         }
 
         // WebSocket error handling
@@ -1214,8 +1095,6 @@
                     existingCustomerChats.add(customerId);
                 }
             });
-
-            console.log('Existing customers:', Array.from(existingCustomerChats));
         });
 
         function getMessage(customerId, loader = true, page = null, scroll = true, append = false) {
@@ -1350,18 +1229,6 @@
                 Notification.requestPermission();
             }
         });
-
-        // Debug function untuk monitoring
-        function debugChatState() {
-            console.log('=== CHAT DEBUG INFO ===');
-            console.log('Existing customers:', Array.from(existingCustomerChats));
-            console.log('Active customer:', $('.get-chat.active').attr('id'));
-            console.log('Chat items count:', $('.get-chat').length);
-            console.log('========================');
-        }
-
-        // Expose debug function globally
-        window.debugChatState = debugChatState;
 
         function initializeChatComponents() {
             const templateBtn = document.querySelector('.template-message-btn');

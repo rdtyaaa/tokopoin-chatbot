@@ -621,7 +621,6 @@
     }
 
     .whatsapp-message {
-        border-left: 3px solid #25D366 !important;
         background: rgba(37, 211, 102, 0.02) !important;
     }
 
@@ -649,7 +648,6 @@
 
     /* Message body styling for WhatsApp messages */
     .message-body.whatsapp-message {
-        border-left: 3px solid #25D366;
         background: rgba(37, 211, 102, 0.02);
     }
 

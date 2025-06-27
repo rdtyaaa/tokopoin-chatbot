@@ -96,12 +96,14 @@
         });
     </script>
     <script>
-        const socket = io("http://localhost:3000", {
-            query: {
-                role: "seller",
-                user_id: {{ auth('seller')->user()->id }}
-            }
-        });
+        if (typeof socket === 'undefined' || socket.disconnected) {
+            newsocket = io("http://localhost:3000", {
+                query: {
+                    role: "seller",
+                    user_id: {{ auth('seller')->user()->id }}
+                }
+            });
+        }
     </script>
 
 </body>

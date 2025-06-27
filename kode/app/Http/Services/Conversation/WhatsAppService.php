@@ -119,7 +119,7 @@ class WhatsAppService
         }
 
         // Clean and format phone number
-        $phone = preg_replace('/[^0-9]/', '', $sellerShop->phone);
+        $phone = preg_replace('/[^0-9]/', '', $sellerShop->whatsapp_number);
 
         // Convert to international format
         if (str_starts_with($phone, '08')) {

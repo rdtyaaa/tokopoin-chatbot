@@ -524,12 +524,14 @@
         })
     </script>
     <script>
-        const socket = io("http://localhost:3000", {
-            query: {
-                role: "customer",
-                user_id: {{ auth()->id() }}
-            }
-        });
+        if (typeof socket === 'undefined' || socket.disconnected) {
+            newsocket = io("http://localhost:3000", {
+                query: {
+                    role: "customer",
+                    user_id: {{ auth()->id() }}
+                }
+            });
+        }
     </script>
 
     {{-- <script src="{{ mix('js/app.js') }}"></script>

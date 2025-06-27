@@ -1,7 +1,6 @@
 <?php
 
 return [
-
     /*
     |--------------------------------------------------------------------------
     | Default Broadcaster
@@ -29,7 +28,6 @@ return [
     */
 
     'connections' => [
-
         'pusher' => [
             'driver' => 'pusher',
             'key' => env('PUSHER_APP_KEY'),
@@ -52,6 +50,9 @@ return [
         'redis' => [
             'driver' => 'redis',
             'connection' => 'default',
+            'options' => [
+                'timeout' => 750,   
+            ],
         ],
 
         'log' => [
@@ -61,7 +62,5 @@ return [
         'null' => [
             'driver' => 'null',
         ],
-
     ],
-
 ];

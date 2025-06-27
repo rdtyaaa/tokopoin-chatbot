@@ -9,6 +9,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use App\Http\Services\Conversation\ChatbotService;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
 
 class ProcessChatbotResponse implements ShouldQueue
 {
@@ -19,9 +20,9 @@ class ProcessChatbotResponse implements ShouldQueue
     protected $message;
     protected $productId;
 
-    // PERBAIKAN: Tambahkan retry dan timeout
-    public $tries = 3;
-    public $timeout = 120;
+    public $tries = 2;
+    public $timeout = 360;
+    public $maxExceptions = 3;
 
     public function __construct($customerId, $sellerId, $message, $productId = null)
     {
@@ -29,103 +30,155 @@ class ProcessChatbotResponse implements ShouldQueue
         $this->sellerId = $sellerId;
         $this->message = $message;
         $this->productId = $productId;
+
+        $this->delay(now()->addSeconds(30));
+    }
+
+    public function middleware()
+    {
+        return [
+            new WithoutOverlapping("chatbot-{$this->customerId}-{$this->sellerId}")
+        ];
     }
 
     public function handle(ChatbotService $chatbotService)
     {
-        try {
-            Log::info('Processing chatbot response job started', [
-                'customer_id' => $this->customerId,
-                'seller_id' => $this->sellerId,
-                'product_id' => $this->productId,
-                'message_preview' => substr($this->message, 0, 100)
-            ]);
+        $startTime = microtime(true);
 
-            // PERBAIKAN: Cek ulang apakah chatbot masih perlu di-trigger
+        try {
             if (!$chatbotService->shouldTriggerChatbot($this->sellerId, $this->customerId)) {
-                Log::info('Chatbot no longer needed, skipping', [
-                    'customer_id' => $this->customerId,
-                    'seller_id' => $this->sellerId
-                ]);
                 return;
             }
 
-            // PERBAIKAN: Kirim customerId juga ke sendToAI
-            $response = $chatbotService->sendToAI($this->message, $this->sellerId, $this->customerId, $this->productId);
+            $response = $this->sendToAIWithTimeout($chatbotService);
 
             if ($response && !empty(trim($response))) {
-                Log::info('AI response received, saving chatbot message', [
-                    'customer_id' => $this->customerId,
-                    'seller_id' => $this->sellerId,
-                    'response_length' => strlen($response)
-                ]);
-
                 $chatbotService->saveChatbotResponse($this->customerId, $this->sellerId, $response);
-
-                Log::info('Chatbot response processed successfully', [
-                    'customer_id' => $this->customerId,
-                    'seller_id' => $this->sellerId
-                ]);
             } else {
-                Log::warning('AI response empty, using fallback', [
-                    'customer_id' => $this->customerId,
-                    'seller_id' => $this->sellerId
-                ]);
-
-                $chatbotService->handleChatbotFailure(
-                    $this->customerId,
-                    $this->sellerId,
-                    $this->message
-                );
-
-                // Fallback response jika AI tidak merespon
-                $fallbackResponse = "Terima kasih atas pesan Anda 😊 Saat ini seller sedang tidak tersedia, namun pesan Anda akan segera dibalas. Untuk informasi lebih lanjut, silakan hubungi kami nanti.";
-                $chatbotService->saveChatbotResponse($this->customerId, $this->sellerId, $fallbackResponse);
+                $this->handleEmptyResponse($chatbotService);
             }
 
         } catch (\Exception $e) {
-            Log::error('Error processing chatbot response job', [
-                'customer_id' => $this->customerId,
-                'seller_id' => $this->sellerId,
-                'error_message' => $e->getMessage(),
-                'error_trace' => $e->getTraceAsString()
-            ]);
-
-            // PERBAIKAN: Jika gagal, coba kirim fallback response
-            try {
-                $fallbackResponse = "Maaf, saat ini sistem chatbot mengalami gangguan 🙏 Tim kami akan segera membalas pesan Anda.";
-                $chatbotService->saveChatbotResponse($this->customerId, $this->sellerId, $fallbackResponse, 1);
-                $chatbotService->handleChatbotFailure(
-                    $this->customerId,
-                    $this->sellerId,
-                    $this->message
-                );
-
-                Log::info('Fallback chatbot response sent due to error', [
-                    'customer_id' => $this->customerId,
-                    'seller_id' => $this->sellerId
-                ]);
-            } catch (\Exception $fallbackError) {
-                Log::error('Failed to send fallback chatbot response', [
-                    'customer_id' => $this->customerId,
-                    'seller_id' => $this->sellerId,
-                    'fallback_error' => $fallbackError->getMessage()
-                ]);
-
-                // Re-throw original exception
-                throw $e;
-            }
+            $this->handleJobException($e, $chatbotService, $startTime);
         }
     }
 
-    // PERBAIKAN: Handle job failure
+    private function sendToAIWithTimeout(ChatbotService $chatbotService)
+    {
+        $startTime = microtime(true);
+
+        try {
+            $response = $chatbotService->sendToAI(
+                $this->message,
+                $this->sellerId,
+                $this->customerId,
+                $this->productId
+            );
+
+            $executionTime = microtime(true) - $startTime;
+
+            if (empty($response) && $executionTime > 90) {
+                throw new \Exception('AI response timeout - no response received after ' . round($executionTime, 2) . 's');
+            }
+
+            return $response;
+
+        } catch (\Exception $e) {
+            $executionTime = microtime(true) - $startTime;
+
+            Log::error('AI request failed', [
+                'customer_id' => $this->customerId,
+                'seller_id' => $this->sellerId,
+                'execution_time' => round($executionTime, 2) . 's',
+                'error' => $e->getMessage()
+            ]);
+
+            throw $e;
+        }
+    }
+
+    private function handleEmptyResponse(ChatbotService $chatbotService)
+    {
+        Log::warning('AI response empty, using fallback', [
+            'customer_id' => $this->customerId,
+            'seller_id' => $this->sellerId
+        ]);
+
+        $chatbotService->handleChatbotFailure(
+            $this->customerId,
+            $this->sellerId,
+            $this->message
+        );
+
+        $fallbackResponse = "Terima kasih atas pesan Anda 😊 Saat ini seller sedang tidak tersedia, namun pesan Anda akan segera dibalas. Untuk informasi lebih lanjut, silakan hubungi kami nanti.";
+        $chatbotService->saveChatbotResponse($this->customerId, $this->sellerId, $fallbackResponse);
+    }
+
+    private function handleJobException(\Exception $e, ChatbotService $chatbotService, $startTime)
+    {
+        $executionTime = round(microtime(true) - $startTime, 2);
+
+        Log::error('Error processing chatbot response job', [
+            'customer_id' => $this->customerId,
+            'seller_id' => $this->sellerId,
+            'error_message' => $e->getMessage(),
+            'execution_time' => $executionTime . 's',
+            'attempt' => $this->attempts(),
+            'max_tries' => $this->tries
+        ]);
+
+        $isLongTimeout = str_contains(strtolower($e->getMessage()), 'timeout') && $executionTime > 300;
+
+        if ($this->attempts() < $this->tries && !$isLongTimeout) {
+            Log::info('Will retry chatbot job', [
+                'customer_id' => $this->customerId,
+                'seller_id' => $this->sellerId,
+                'next_attempt' => $this->attempts() + 1,
+                'skip_reason' => $isLongTimeout ? 'Long timeout detected' : null
+            ]);
+
+            $this->release(60);
+            return;
+        }
+
+        try {
+            $fallbackResponse = "Maaf, saat ini sistem chatbot mengalami gangguan 🙏 Tim kami akan segera membalas pesan Anda.";
+            $chatbotService->saveChatbotResponse($this->customerId, $this->sellerId, $fallbackResponse, 1);
+            $chatbotService->handleChatbotFailure(
+                $this->customerId,
+                $this->sellerId,
+                $this->message
+            );
+
+            Log::info('Fallback chatbot response sent', [
+                'customer_id' => $this->customerId,
+                'seller_id' => $this->sellerId,
+                'execution_time' => $executionTime . 's'
+            ]);
+        } catch (\Exception $fallbackError) {
+            Log::error('Failed to send fallback chatbot response', [
+                'customer_id' => $this->customerId,
+                'seller_id' => $this->sellerId,
+                'fallback_error' => $fallbackError->getMessage()
+            ]);
+
+            $this->fail($e);
+        }
+    }
+
     public function failed(\Throwable $exception)
     {
         Log::error('ProcessChatbotResponse job failed permanently', [
             'customer_id' => $this->customerId,
             'seller_id' => $this->sellerId,
             'error_message' => $exception->getMessage(),
-            'attempts' => $this->attempts()
+            'attempts' => $this->attempts(),
+            'job_class' => self::class
         ]);
+    }
+
+    public function getJobIdentifier()
+    {
+        return "chatbot-{$this->customerId}-{$this->sellerId}";
     }
 }

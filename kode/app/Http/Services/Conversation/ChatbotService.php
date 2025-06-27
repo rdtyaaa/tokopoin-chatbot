@@ -10,16 +10,22 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Redis;
 use App\Models\CustomerSellerConversation;
+use App\Http\Services\Conversation\RAGService;
 use App\Http\Services\Conversation\WhatsAppService;
+use App\Http\Services\Conversation\IntentDetectionService;
 
 class ChatbotService
 {
     protected $apiUrl;
+    protected $intentService;
+    protected $ragService;
 
     public function __construct()
     {
-        // Ganti dengan URL API yang sesungguhnya nanti
         $this->apiUrl = config('chatbot.api_url', 'https://dummy-ai-api.example.com/chat');
+
+        $this->intentService = new IntentDetectionService();
+        $this->ragService = new RAGService();
     }
 
     /**
@@ -30,22 +36,9 @@ class ChatbotService
         try {
             $globalUserId = "seller-{$sellerId}";
 
-            // Opsi 1: Menggunakan sismember (lebih efisien untuk check membership)
             $isOnline = Redis::sismember('online_users', $globalUserId);
 
-            // Opsi 2: Jika ingin tetap menggunakan smembers
-            // $onlineUsers = Redis::smembers('online_users');
-            // $isOnline = in_array($globalUserId, $onlineUsers);
-
-            // Get count untuk logging
             $onlineUsersCount = Redis::scard('online_users');
-
-            Log::info('Seller online check', [
-                'seller_id' => $sellerId,
-                'global_user_id' => $globalUserId,
-                'is_online' => (bool) $isOnline, // Cast ke boolean untuk konsistensi
-                'online_users_count' => $onlineUsersCount,
-            ]);
 
             return (bool) $isOnline;
         } catch (\Exception $e) {
@@ -67,7 +60,7 @@ class ChatbotService
     }
 
     /**
-     * Updated: Cek apakah harus trigger chatbot dengan sistem trigger baru
+     * Cek apakah harus trigger chatbot dengan sistem trigger baru
      */
     public function shouldTriggerChatbot($sellerId, $customerId): bool
     {
@@ -85,23 +78,14 @@ class ChatbotService
             $shouldTrigger = false;
             $reasons = [];
 
-            // Check trigger when seller offline
             if ($setting->trigger_when_offline) {
                 $isSellerOnline = $this->isSellerOnline($sellerId);
                 if (!$isSellerOnline) {
                     $shouldTrigger = true;
                     $reasons[] = 'seller_offline';
                 }
-
-                Log::info('Chatbot offline trigger check', [
-                    'seller_id' => $sellerId,
-                    'seller_online' => $isSellerOnline,
-                    'trigger_enabled' => true,
-                    'should_trigger' => !$isSellerOnline,
-                ]);
             }
 
-            // Check trigger when no reply (works independently from offline trigger)
             if ($setting->trigger_when_no_reply && $setting->delay_minutes) {
                 $lastSellerMessage = CustomerSellerConversation::where('seller_id', $sellerId)->where('customer_id', $customerId)->where('sender_role', 'seller')->latest()->first();
 
@@ -154,18 +138,14 @@ class ChatbotService
     }
 
     /**
-     * FIXED: Get product ID from conversation or URL
      * Now handles null seller by searching all customer conversations
      * Returns array with product and updated seller_id
      */
     private function getProductFromConversation($sellerId, $customerId, $productId = null): array
     {
-        // Jika ada productId langsung, gunakan itu
         if ($productId) {
-            // Load product dengan relasi stock untuk mendapatkan stok
             $product = Product::with(['stock', 'category', 'brand'])->find($productId);
             if ($product) {
-                // Set seller_id dari product jika seller_id null
                 $finalSellerId = $sellerId ?? $product->seller_id;
                 return [
                     'product' => $product,
@@ -175,17 +155,10 @@ class ChatbotService
             return ['product' => null, 'seller_id' => $sellerId];
         }
 
-        // Build query untuk mencari conversation dengan file attachment
         $query = CustomerSellerConversation::where('customer_id', $customerId)->whereNotNull('files');
 
-        // Jika sellerId ada, filter berdasarkan seller
-        // Jika sellerId null, cari dari semua conversation customer tersebut
         if ($sellerId !== null) {
             $query->where('seller_id', $sellerId);
-            Log::info('Searching product from specific seller conversation', [
-                'seller_id' => $sellerId,
-                'customer_id' => $customerId,
-            ]);
         } else {
             Log::info('Searching product from all customer conversations (seller is null)', [
                 'customer_id' => $customerId,
@@ -196,7 +169,6 @@ class ChatbotService
 
         if ($conversationWithProduct && $conversationWithProduct->files) {
             try {
-                // Parse JSON dari files
                 $files = is_array($conversationWithProduct->files) ? $conversationWithProduct->files : json_decode($conversationWithProduct->files, true);
 
                 if (is_array($files)) {
@@ -206,18 +178,7 @@ class ChatbotService
                         if (isset($fileData['type']) && $fileData['type'] === 'product' && isset($fileData['product_id'])) {
                             $product = Product::with(['stock', 'category', 'brand'])->find($fileData['product_id']);
                             if ($product) {
-                                // Set seller_id dari product jika seller_id null
                                 $finalSellerId = $sellerId ?? $product->seller_id;
-
-                                Log::info('Product found from conversation history', [
-                                    'product_id' => $product->id,
-                                    'product_name' => $product->name,
-                                    'original_seller_id' => $sellerId ?? 'null',
-                                    'final_seller_id' => $finalSellerId,
-                                    'customer_id' => $customerId,
-                                    'conversation_seller_id' => $conversationWithProduct->seller_id,
-                                    'product_seller_id' => $product->seller_id,
-                                ]);
 
                                 return [
                                     'product' => $product,
@@ -236,11 +197,6 @@ class ChatbotService
             }
         }
 
-        Log::info('No product found in conversation history', [
-            'seller_id' => $sellerId ?? 'null',
-            'customer_id' => $customerId,
-        ]);
-
         return ['product' => null, 'seller_id' => $sellerId];
     }
 
@@ -249,19 +205,12 @@ class ChatbotService
      */
     private function getConversationHistory($sellerId, $customerId, $limit = 10): array
     {
-        $conversations = CustomerSellerConversation::where('seller_id', $sellerId)
-            ->where('customer_id', $customerId)
-            ->orderBy('created_at', 'desc')
-            ->limit($limit)
-            ->get()
-            ->reverse() // Balik urutan agar chronological
-            ->values();
+        $conversations = CustomerSellerConversation::where('seller_id', $sellerId)->where('customer_id', $customerId)->orderBy('created_at', 'desc')->limit($limit)->get()->reverse()->values();
 
         $history = [];
         foreach ($conversations as $conv) {
             $role = $conv->sender_role;
 
-            // Normalisasi role untuk AI
             if ($role === 'customer') {
                 $role = 'Customer';
             } elseif ($role === 'seller') {
@@ -274,6 +223,7 @@ class ChatbotService
                 'role' => $role,
                 'message' => $conv->message,
                 'timestamp' => $conv->created_at->format('Y-m-d H:i:s'),
+                'sender_role' => $conv->sender_role,
             ];
         }
 
@@ -284,112 +234,169 @@ class ChatbotService
      * Kirim pesan ke AI Engine
      */
     public function sendToAI($message, $sellerId, $customerId, $productId = null): ?string
-    {
-        // Jika environment testing dengan Ollama
-        if (config('chatbot.use_ollama', false)) {
-            $response = $this->sendToOllama($message, $sellerId, $customerId, $productId);
-
-            // Jika Ollama gagal, return fallback message
-            if (!$response) {
-                Log::warning('Ollama failed, returning fallback message', [
-                    'seller_id' => $sellerId,
-                    'customer_id' => $customerId,
-                ]);
-
-                return 'Maaf, sistem sedang sibuk. Silakan tunggu sebentar dan coba lagi, atau hubungi admin jika masalah berlanjut.';
-            }
-
-            return $response;
-        }
-
-        try {
-            $seller = Seller::with('sellerShop')->find($sellerId);
-            $product = $this->getProductFromConversation($sellerId, $customerId, $productId);
-
-            // TAMBAHAN: Ambil riwayat untuk external API juga
-            $conversationHistory = $this->getConversationHistory($sellerId, $customerId, 5);
-
-            $payload = [
-                'message' => $message,
-                'seller' => [
-                    'id' => $seller->id,
-                    'shop_name' => $seller->sellerShop->shop_name ?? '',
-                    'description' => $seller->sellerShop->details ?? '',
-                ],
-                'product' => $product
-                    ? [
-                        'id' => $product->id,
-                        'name' => $product->name,
-                        'description' => $product->description,
-                        'price' => $product->selling_price,
-                    ]
-                    : null,
-                'conversation_history' => $conversationHistory, // TAMBAHAN
-                'context' => 'customer_inquiry',
-            ];
-
-            $response = Http::timeout(30)->post($this->apiUrl, $payload);
-
-            if ($response->successful()) {
-                $data = $response->json();
-                return $data['response'] ?? null;
-            }
-
-            Log::error('AI API Error: ' . $response->body());
-            return null;
-        } catch (\Exception $e) {
-            Log::error('Error sending message to AI: ' . $e->getMessage());
-            return null;
-        }
+{
+    $seller = Seller::with('sellerShop')->find($sellerId);
+    if (!$seller) {
+        Log::warning('Seller not found', [
+            'seller_id' => $sellerId,
+            'customer_id' => $customerId,
+        ]);
+        return 'Maaf, toko tidak ditemukan.';
     }
 
-    /**
-     * TESTING METHOD - Kirim pesan ke Ollama (FIXED FOR DEEPSEEK-R1)
-     */
-    private function sendToOllama($message, $sellerId, $customerId, $productId = null): ?string
-    {
-        set_time_limit(350);
-        Log::info('sendToOllama - Method Entry', [
-            'seller_id_received' => $sellerId,
-            'seller_id_type' => gettype($sellerId),
-            'customer_id' => $customerId,
-            'product_id' => $productId,
-            'message' => $message,
-        ]);
-        try {
-            $seller = Seller::with('sellerShop')->find($sellerId);
+    $product = null;
+    if ($productId) {
+        $product = Product::find($productId);
+    }
 
-            Log::info('sendToOllama - After Seller Query', [
-                'seller_id_queried' => $sellerId,
-                'seller_found' => $seller ? 'yes' : 'no',
-                'seller_actual_id' => $seller ? $seller->id : null,
+    $intentResult = $this->intentService->detectIntentWithProductContext($message, $sellerId, $productId);
+
+    if (!$product && isset($intentResult['product_id'])) {
+        $product = Product::find($intentResult['product_id']);
+        Log::info('Using product from intent detection', [
+            'product_id' => $product?->id,
+            'product_name' => $product?->name,
+        ]);
+    }
+
+    $ragContext = $this->ragService->retrieveRelevantInfo(
+        $intentResult['intent'],
+        $sellerId,
+        $customerId,
+        $product?->id ?? $productId,
+        $message
+    );
+
+    if (config('chatbot.use_ollama', false)) {
+        $response = $this->sendToOllama($message, $seller, $customerId, $product, $intentResult, $ragContext);
+
+        if (!$response) {
+            Log::warning('Ollama failed, returning fallback message', [
+                'seller_id' => $sellerId,
+                'customer_id' => $customerId,
             ]);
 
+            return $this->getFallbackResponse($intentResult['intent'], $ragContext);
+        }
+
+        return $response;
+    }
+
+    try {
+        if (!$product) {
             $productResult = $this->getProductFromConversation($sellerId, $customerId, $productId);
             $product = $productResult['product'];
-            $sellerId = $productResult['seller_id'];
+        }
 
-            if ($sellerId && !$seller) {
-                $seller = Seller::with('sellerShop')->find($sellerId);
-                Log::info('sendToOllama - Seller updated from product', [
-                    'new_seller_id' => $sellerId,
-                    'seller_found' => $seller ? 'yes' : 'no',
-                ]);
+        $conversationHistory = $this->getConversationHistory($sellerId, $customerId, 5);
+
+        $payload = [
+            'message' => $message,
+            'intent' => $intentResult,
+            'context' => $ragContext,
+            'seller' => [
+                'id' => $seller->id,
+                'shop_name' => $seller->sellerShop->shop_name ?? '',
+                'description' => $seller->sellerShop->details ?? '',
+            ],
+            'product' => $product
+                ? [
+                    'id' => $product->id,
+                    'name' => $product->name,
+                    'description' => $product->description,
+                    'price' => $product->price,
+                ]
+                : null,
+            'conversation_history' => $conversationHistory,
+            'context_type' => 'customer_inquiry',
+        ];
+
+        $response = Http::timeout(30)->post($this->apiUrl, $payload);
+
+        if ($response->successful()) {
+            $data = $response->json();
+            return $data['response'] ?? null;
+        }
+
+        Log::error('AI API Error: ' . $response->body());
+        return $this->getFallbackResponse($intentResult['intent'], $ragContext);
+    } catch (\Exception $e) {
+        Log::error('Error sending message to AI: ' . $e->getMessage());
+        return $this->getFallbackResponse($intentResult['intent'], $ragContext);
+    }
+}
+
+    /**
+     * Kirim pesan ke Ollama
+     */
+    private function sendToOllama($message, $seller, $customerId, $product = null, $intentResult = null, $ragContext = null): ?string
+    {
+        set_time_limit(0);
+
+        $totalStartTime = microtime(true);
+        $timingBreakdown = [];
+
+        try {
+            $prepStartTime = microtime(true);
+
+            $sellerId = $seller->id;
+
+            if (!$product) {
+                if (isset($ragContext['product']['id'])) {
+                    $foundProduct = Product::where('id', $ragContext['product']['id'])->where('seller_id', $sellerId)->first();
+
+                    if ($foundProduct) {
+                        $product = $foundProduct;
+                        Log::info('sendToOllama - Using product found by RAG search', [
+                            'product_id' => $product->id,
+                            'product_name' => $product->name,
+                            'seller_id' => $sellerId,
+                        ]);
+                    } else {
+                        $productResult = $this->getProductFromConversation($sellerId, $customerId, null);
+                        $product = $productResult['product'];
+
+                        Log::info('sendToOllama - Using product from conversation', [
+                            'product_id' => $product?->id,
+                            'product_name' => $product?->name ?? 'null',
+                            'seller_id' => $sellerId,
+                        ]);
+                    }
+                } else {
+                    $productResult = $this->getProductFromConversation($sellerId, $customerId, null);
+                    $product = $productResult['product'];
+
+                    Log::info('sendToOllama - No RAG product, using conversation product', [
+                        'product_id' => $product?->id,
+                        'product_name' => $product?->name ?? 'null',
+                        'seller_id' => $sellerId,
+                    ]);
+                }
             }
 
             $conversationHistory = $this->getConversationHistory($sellerId, $customerId, 8);
 
-            Log::info('sendToOllama - Conversation History Retrieved', [
-                'seller_id' => $seller,
-                'customer_id' => $customerId,
-                'history_count' => count($conversationHistory),
-            ]);
+            $contextPrompt = '';
+            if ($ragContext && isset($ragContext['type'])) {
+                $contextPrompt = $this->ragService->generateContextPrompt($ragContext, $intentResult['intent'] ?? 'unknown');
 
-            // Gunakan model yang lebih simple untuk testing
-            $model = config('chatbot.ollama_model', 'deepseek-r1:8b');
+                Log::info('sendToOllama - RAG Context Generated', [
+                    'seller_id' => $sellerId,
+                    'customer_id' => $customerId,
+                    'intent' => $intentResult['intent'] ?? 'unknown',
+                    'context_length' => strlen($contextPrompt),
+                    'context_preview' => substr($contextPrompt, 0, 200) . '...',
+                    'found_from_search' => $ragContext['found_from_search'] ?? false,
+                ]);
+            }
 
-            // Build prompt yang lebih sederhana untuk DeepSeek-R1
-            $prompt = $this->buildDetailedPrompt($message, $seller, $product);
+            $model = config('chatbot.ollama_model', 'llama3.2:3b');
+            // $model = config('chatbot.ollama_model', 'deepseek-r1:8b');
+            $prompt = $this->buildDetailedPromptWithContext($message, $seller, $product, $intentResult, $ragContext, $contextPrompt, $conversationHistory);
+
+            $timingBreakdown['data_preparation'] = round((microtime(true) - $prepStartTime) * 1000, 2);
+
+            $payloadStartTime = microtime(true);
 
             $payload = [
                 'model' => $model,
@@ -403,19 +410,29 @@ class ChatbotService
                 ],
             ];
 
-            Log::info('Ollama Request with Context', [
+            $timingBreakdown['payload_preparation'] = round((microtime(true) - $payloadStartTime) * 1000, 2);
+
+            Log::info('Ollama Request', [
                 'seller_id' => $sellerId,
                 'customer_id' => $customerId,
                 'product_id' => $product?->id,
                 'customer_message' => $message,
+                'detected_intent' => $intentResult['intent'] ?? 'unknown',
+                'intent_confidence' => $intentResult['confidence'] ?? 0,
+                'context_type' => $ragContext['type'] ?? 'none',
+                'found_from_search' => $ragContext['found_from_search'] ?? false,
                 'model' => $payload['model'],
                 'history_entries' => count($conversationHistory),
-                'prompt' => $prompt,
+                'prompt_length' => strlen($prompt),
+                'has_context_prompt' => !empty($contextPrompt),
+                'timing_so_far' => $timingBreakdown,
+                'prompt' => "\n",
+                $prompt,
             ]);
 
             $ollamaUrl = config('chatbot.ollama_url', 'http://localhost:11434') . '/api/generate';
 
-            $startTime = microtime(true);
+            $httpStartTime = microtime(true);
 
             $response = Http::withOptions([
                 'timeout' => 300,
@@ -423,136 +440,301 @@ class ChatbotService
                 'read_timeout' => 300,
             ])->post($ollamaUrl, $payload);
 
-            $responseTime = round((microtime(true) - $startTime) * 1000, 2);
+            $timingBreakdown['http_request'] = round((microtime(true) - $httpStartTime) * 1000, 2);
+
+            $processStartTime = microtime(true);
 
             if ($response->successful()) {
                 $data = $response->json();
                 $rawResponse = $data['response'] ?? null;
 
-                Log::info('Ollama Raw Response with Context', [
-                    'seller_id' => $sellerId,
-                    'customer_id' => $customerId,
-                    'response_time_ms' => $responseTime,
-                    'raw_response' => $rawResponse,
-                    'response_length' => $rawResponse ? mb_strlen($rawResponse) : 0,
-                    'model_used' => $model,
-                ]);
-
                 if ($rawResponse && trim($rawResponse) !== '') {
-                    // Bersihkan response dengan method yang lebih aggressive
                     $cleanResponse = $this->cleanResponseAdvanced($rawResponse);
 
-                    Log::info('Ollama Cleaned Response with Context', [
+                    $timingBreakdown['response_processing'] = round((microtime(true) - $processStartTime) * 1000, 2);
+                    $timingBreakdown['total_execution'] = round((microtime(true) - $totalStartTime) * 1000, 2);
+
+                    Log::info('Ollama Final Response with Timing', [
                         'seller_id' => $sellerId,
                         'customer_id' => $customerId,
+                        'intent' => $intentResult['intent'] ?? 'unknown',
+                        'found_from_search' => $ragContext['found_from_search'] ?? false,
+                        'raw_response' => $rawResponse,
                         'cleaned_response' => $cleanResponse,
-                        'cleaned_length' => mb_strlen($cleanResponse),
+                        'final_length' => mb_strlen($cleanResponse),
+                        'timing_breakdown' => $timingBreakdown,
+                        'performance_metrics' => [
+                            'total_time_ms' => $timingBreakdown['total_execution'],
+                            'total_time_s' => round($timingBreakdown['total_execution'] / 1000, 3),
+                            'total_time_min' => round($timingBreakdown['total_execution'] / 60000, 3),
+                            'http_percentage' => round(($timingBreakdown['http_request'] / $timingBreakdown['total_execution']) * 100, 1),
+                            'processing_percentage' => round(($timingBreakdown['response_processing'] / $timingBreakdown['total_execution']) * 100, 1),
+                            'preparation_percentage' => round((($timingBreakdown['data_preparation'] + $timingBreakdown['payload_preparation']) / $timingBreakdown['total_execution']) * 100, 1),
+                        ],
                     ]);
 
                     return $cleanResponse;
                 } else {
+                    $timingBreakdown['response_processing'] = round((microtime(true) - $processStartTime) * 1000, 2);
+                    $timingBreakdown['total_execution'] = round((microtime(true) - $totalStartTime) * 1000, 2);
+
                     Log::warning('Ollama returned empty response', [
                         'seller_id' => $sellerId,
                         'customer_id' => $customerId,
-                        'full_api_response' => $data,
+                        'intent' => $intentResult['intent'] ?? 'unknown',
+                        'context_type' => $ragContext['type'] ?? 'none',
+                        'found_from_search' => $ragContext['found_from_search'] ?? false,
+                        'timing_breakdown' => $timingBreakdown,
                     ]);
+
+                    return $this->getFallbackResponse($intentResult['intent'] ?? 'unknown', $ragContext);
                 }
             }
+
+            $timingBreakdown['response_processing'] = round((microtime(true) - $processStartTime) * 1000, 2);
+            $timingBreakdown['total_execution'] = round((microtime(true) - $totalStartTime) * 1000, 2);
 
             Log::error('Ollama API Error', [
                 'seller_id' => $sellerId,
                 'customer_id' => $customerId,
-                'response_time_ms' => $responseTime,
+                'intent' => $intentResult['intent'] ?? 'unknown',
+                'context_type' => $ragContext['type'] ?? 'none',
+                'found_from_search' => $ragContext['found_from_search'] ?? false,
                 'status_code' => $response->status(),
                 'error_body' => $response->body(),
-                'payload' => $payload,
+                'timing_breakdown' => $timingBreakdown,
             ]);
+
             return null;
         } catch (\Exception $e) {
+            $timingBreakdown['total_execution'] = round((microtime(true) - $totalStartTime) * 1000, 2);
+
             Log::error('Error sending message to Ollama', [
-                'seller_id' => $sellerId,
+                'seller_id' => $seller->id ?? 'unknown',
                 'customer_id' => $customerId,
-                'product_id' => $productId,
+                'product_id' => $product?->id,
                 'customer_message' => $message,
+                'intent' => $intentResult['intent'] ?? 'unknown',
+                'context_type' => $ragContext['type'] ?? 'none',
+                'found_from_search' => $ragContext['found_from_search'] ?? false,
                 'error_message' => $e->getMessage(),
-                'error_trace' => $e->getTraceAsString(),
+                'timing_breakdown' => $timingBreakdown,
             ]);
+
             return null;
         }
     }
 
     /**
+     * Fungsi alternatif dengan lebih banyak kontrol untuk cleaning
+     */
+    // function parseProductDescriptionAdvanced($htmlDescription) {
+    //     if (empty($htmlDescription)) {
+    //         return '';
+    //     }
+
+    //     $decoded = html_entity_decode($htmlDescription, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+/**
+*        $decoded = preg_replace('/<br\s*\/?>/i', ' ', $decoded);
+*/
+    //     $cleanText = strip_tags($decoded);
+
+    //     $cleanText = preg_replace('/[\s\t\n\r]+/', ' ', $cleanText);
+
+    //     $cleanText = trim($cleanText);
+
+    //     return $cleanText;
+    // }
+
+    /**
      * Build prompt yang lebih detailed dengan info produk lengkap
      */
-    private function buildDetailedPrompt($message, $seller, $product = null): string
+    private function buildDetailedPromptWithContext($message, $seller, $product, $intentResult, $ragContext, $contextPrompt, $conversationHistory): string
     {
-        $shopName = $seller->name ?? 'Seluruh Toko di e-commerce TokoPoin';
-        $shopDetails = $seller->sellerShop->short_details ?? '';
+        $shopName = $seller && $seller->sellerShop ? $seller->sellerShop->shop_name : 'Toko Online';
+        $sellerName = $seller ? $seller->name : 'Customer Service TokoPoin';
+        $intent = $intentResult['intent'] ?? 'unknown';
+        $confidence = $intentResult['confidence'] ?? 0;
 
-        $prompt = "Anda adalah customer service dari {$shopName}. ";
-        if ($shopDetails) {
-            $prompt .= "Toko kami: {$shopDetails}. ";
+        $prompt = "Anda adalah customer service AI yang ramah dan profesional untuk {$shopName}.\n\n";
+
+        $prompt .= "=== ANALISIS PESAN ===\n";
+        $prompt .= "Intent terdeteksi: {$intent}\n";
+        $prompt .= "Confidence level: {$confidence}%\n";
+        $prompt .= "Pesan customer: \"{$message}\"\n\n";
+
+        if (!empty($contextPrompt)) {
+            $prompt .= "=== INFORMASI RELEVAN ===\n";
+            $prompt .= $contextPrompt . "\n";
         }
-        $prompt .= 'Jawab pertanyaan customer dengan ramah, dan informatif dalam bahasa Indonesia. ';
-        $prompt .= 'PENTING! Jika informasi terkait produk termasuk seller kurang jelas, soalnya ada kamu menghandel banyak product dari banyak seller. silahkan bertanya terlebih dahulu mana yang dimaksud dengan mengirimkan linknya. ';
-        $prompt .= "Berikan jawaban yang lengkap tapi tetap ringkas tanpa menggunakan bold (**) ataupun italic. Buat agar customer tertarik untuk membeli.\n\n";
 
-        if ($product) {
-            $originalPrice = $product->price ?? 0;
-            $sellingPrice = $product->selling_price ?? $originalPrice;
-            $formattedPrice = 'Rp ' . number_format($sellingPrice, 0, ',', '.');
+        // if ($product) {
+        //     $prompt .= "=== PRODUK YANG DIBAHAS ===\n";
+        //     $prompt .= "Nama: {$product->name}\n";
 
-            $stock = $product->maximum_purchase_qty ?? 0;
-            if ($product->stock && $product->stock->count() > 0) {
-                $totalStock = $product->stock->sum('qty');
-                $stock = $totalStock > 0 ? $totalStock : $stock;
-            }
+        //     $finalPrice = $product->price;
+        //     $hasDiscount = false;
 
-            $prompt .= "=== INFORMASI PRODUK ===\n";
-            $prompt .= "Nama: {$product->name}\n";
-            $prompt .= "Harga: {$formattedPrice}\n";
+        //     if (!empty($product->discount)) {
+        //         $finalPrice = $product->price - $product->discount;
+        //         $hasDiscount = true;
+        //     }
 
-            $prompt .= "Stok: {$stock} unit\n";
+        //     if ($hasDiscount) {
+        //         $prompt .= 'Harga: Rp ' . number_format($finalPrice, 0, ',', '.') . ' (Diskon dari Rp ' . number_format($product->price, 0, ',', '.') . ')' . "\n";
+        //     } else {
+        //         $prompt .= 'Harga: Rp ' . number_format($finalPrice, 0, ',', '.') . "\n";
+        //     }
 
-            if ($product->description) {
-                // Bersihkan HTML dari deskripsi dan ambil 200 karakter pertama
-                $cleanDesc = strip_tags($product->description);
-                $cleanDesc = preg_replace('/\s+/', ' ', $cleanDesc);
-                $cleanDesc = trim($cleanDesc);
-
-                if (strlen($cleanDesc) > 500) {
-                    $cleanDesc = substr($cleanDesc, 0, 500) . '...';
-                }
-
-                $prompt .= "Deskripsi: {$cleanDesc}\n";
-            }
-
-            $prompt .= "=== END PRODUK ===\n\n";
-        }
+        //     if ($product->description) {
+        //         $cleanDescription = $this->parseProductDescriptionAdvanced($product->description);
+        //         if (!empty($cleanDescription)) {
+        //             $prompt .= "Deskripsi: {$cleanDescription}\n";
+        //         }
+        //     }
+        //     $prompt .= "\n";
+        // }
 
         if (!empty($conversationHistory)) {
-            $prompt .= "=== RIWAYAT OBROLAN SEBELUMNYA ===\n";
-
-            foreach ($conversationHistory as $entry) {
-                $role = $entry['role'];
-                $msg = $entry['message'];
-
-                // Batasi panjang pesan untuk menghemat token
-                if (mb_strlen($msg) > 150) {
-                    $msg = mb_substr($msg, 0, 150) . '...';
-                }
-
-                $prompt .= "{$role}: {$msg}\n";
+            $prompt .= "=== RIWAYAT PERCAKAPAN ===\n";
+            foreach (array_slice($conversationHistory, -5) as $conv) {
+                $role = $conv['sender_role'] === 'customer' ? 'Customer' : 'CS';
+                $prompt .= "{$role}: {$conv['message']}\n";
             }
-
-            $prompt .= "=== END RIWAYAT ===\n\n";
-            $prompt .= "Berdasarkan riwayat obrolan di atas, berikan jawaban yang sesuai dengan konteks percakapan sebelumnya.\n\n";
+            $prompt .= "\n";
         }
 
-        $prompt .= "Pertanyaan Customer: {$message}\n\n";
-        $prompt .= "Jawaban Customer Service {$shopName}:";
+        $prompt .= $this->getIntentSpecificInstructions($intent, $ragContext);
+
+        $prompt .= "=== INSTRUKSI RESPONS ===\n";
+        $prompt .= "- Jawab dalam Bahasa Indonesia dengan singkat tetapi tetap ramah dan profesional\n";
+        $prompt .= "- Berikan informasi yang akurat berdasarkan context yang tersedia\n";
+        $prompt .= "- Jika tidak ada informasi yang cukup, minta customer untuk menjelaskan lebih spesifik\n";
+        $prompt .= "- Gunakan emoji secukupnya untuk memberikan kesan ramah\n";
+        $prompt .= "- Jangan membuat informasi yang tidak ada dalam context\n";
+        $prompt .= "- Fokus menjawab sesuai dengan intent: {$intent}\n\n";
+
+        $prompt .= "Customer bertanya: \"{$message}\"\n\n";
+        $prompt .= 'Jawaban CS:';
 
         return $prompt;
+    }
+
+    private function getIntentSpecificInstructions(string $intent, array $ragContext): string
+    {
+        $instructions = '=== PANDUAN KHUSUS INTENT: ' . strtoupper($intent) . " ===\n";
+
+        switch ($intent) {
+            case 'product_listing':
+                $instructions .= "- Tampilkan daftar produk yang tersedia dengan format yang rapi\n";
+                $instructions .= "- Sertakan nama, harga, dan status stok\n";
+                $instructions .= "- Tawarkan bantuan untuk informasi lebih detail\n";
+                break;
+
+            case 'price_inquiry':
+                $instructions .= "- Berikan informasi harga yang jelas dan akurat\n";
+                $instructions .= "- Berikan informasi harga dari produk yang kamu ketahui saja\n";
+                $instructions .= "- Sebutkan jika ada diskon atau promo khusus\n";
+                $instructions .= "- Tawarkan informasi tambahan tentang produk\n";
+                break;
+
+            case 'stock_availability':
+                $instructions .= "- Berikan informasi stok yang akurat dan real-time\n";
+                $instructions .= "- Jika habis, tawarkan alternatif atau restock info\n";
+                $instructions .= "- Sarankan untuk order segera jika stok terbatas\n";
+                break;
+
+            case 'product_recommendation':
+                $instructions .= "- Berikan rekomendasi yang relevan dengan kebutuhan customer\n";
+                $instructions .= "- Jelaskan keunggulan produk yang direkomendasikan\n";
+                $instructions .= "- Tanyakan preferensi spesifik jika diperlukan\n";
+                break;
+
+            case 'order_process':
+                $instructions .= "- Jelaskan langkah-langkah order dengan jelas dan bertahap\n";
+                $instructions .= "- Tawarkan bantuan untuk proses pemesanan\n";
+                $instructions .= "- Berikan informasi estimasi waktu proses\n";
+                break;
+
+            case 'payment_method':
+                $instructions .= "- Jelaskan semua metode pembayaran yang tersedia\n";
+                $instructions .= "- Berikan informasi tentang keamanan pembayaran\n";
+                $instructions .= "- Tawarkan bantuan untuk proses pembayaran\n";
+                break;
+
+            case 'shipping_info':
+                $instructions .= "- Berikan informasi lengkap tentang pengiriman\n";
+                $instructions .= "- Jelaskan estimasi waktu dan biaya pengiriman\n";
+                $instructions .= "- Sebutkan ekspedisi yang tersedia\n";
+                break;
+
+            case 'return_policy':
+                $instructions .= "- Jelaskan kebijakan return dengan jelas\n";
+                $instructions .= "- Sebutkan syarat dan ketentuan return\n";
+                $instructions .= "- Berikan informasi proses refund\n";
+                break;
+
+            case 'greeting':
+                $instructions .= "- Balas salam dengan ramah dan welcoming\n";
+                $instructions .= "- Perkenalkan diri sebagai CS toko\n";
+                $instructions .= "- Tawarkan bantuan dan tanyakan kebutuhan customer\n";
+                break;
+
+            case 'appreciation':
+                $instructions .= "- Terima kasih dengan tulus\n";
+                $instructions .= "- Pastikan customer puas dengan pelayanan\n";
+                $instructions .= "- Tawarkan bantuan lanjutan jika diperlukan\n";
+                break;
+
+            default:
+                $instructions .= "- Pahami kebutuhan customer dengan baik\n";
+                $instructions .= "- Berikan bantuan sesuai dengan konteks yang tersedia\n";
+                $instructions .= "- Jika tidak yakin, minta klarifikasi lebih lanjut\n";
+                break;
+        }
+
+        $instructions .= "\n";
+        return $instructions;
+    }
+
+    private function getFallbackResponse(string $intent, array $ragContext): string
+    {
+        $fallbacks = [
+            'product_listing' => 'Mohon maaf, saat ini saya sedang mengalami kendala dalam mengambil daftar produk. Silakan hubungi CS kami langsung untuk informasi produk terbaru. 😊',
+
+            'price_inquiry' => 'Mohon maaf, untuk informasi harga yang akurat, silakan sebutkan nama produk yang spesifik atau hubungi CS kami langsung. 😊',
+
+            'stock_availability' => 'Untuk informasi stok yang real-time, mohon sebutkan produk yang ingin ditanyakan atau hubungi CS kami langsung. 😊',
+
+            'product_recommendation' => 'Saya akan senang memberikan rekomendasi produk! Bisakah Anda memberitahu saya kategori produk atau budget yang diinginkan? 😊',
+
+            'order_process' => 'Untuk panduan pemesanan, Anda dapat: 1) Pilih produk yang diinginkan, 2) Klik "Beli Sekarang", 3) Isi data pengiriman, 4) Pilih metode pembayaran. Butuh bantuan lebih lanjut? 😊',
+
+            'payment_method' => 'Kami menerima pembayaran melalui Transfer Bank, E-wallet (OVO, DANA, GoPay), dan COD untuk area tertentu. Ada yang ingin ditanyakan tentang pembayaran? 😊',
+
+            'shipping_info' => 'Pengiriman menggunakan JNE, J&T, SiCepat, dan Pos Indonesia. Estimasi 1-3 hari Jabodetabek, 2-5 hari luar kota. Butuh info pengiriman spesifik? 😊',
+
+            'return_policy' => 'Produk dapat diretur dalam 7 hari jika ada kerusakan atau tidak sesuai deskripsi. Syarat: kondisi utuh, kemasan lengkap, ada bukti pembelian. Ada yang ingin ditanyakan? 😊',
+
+            'greeting' => 'Halo! Selamat datang di toko kami 😊 Saya customer service yang siap membantu Anda. Ada yang bisa saya bantu hari ini?',
+
+            'appreciation' => 'Sama-sama! Senang bisa membantu Anda 😊 Jika ada pertanyaan lain, jangan ragu untuk bertanya ya!',
+
+            'general_help' => 'Saya siap membantu Anda! Silakan tanyakan tentang produk, harga, stok, cara order, atau informasi lainnya. Ada yang bisa dibantu? 😊',
+
+            'unknown' => 'Mohon maaf, saya kurang memahami pertanyaan Anda. Bisakah dijelaskan lebih spesifik? Atau hubungi CS kami langsung untuk bantuan lebih lanjut. 😊',
+        ];
+
+        $fallback = $fallbacks[$intent] ?? $fallbacks['unknown'];
+
+        if (isset($ragContext['seller_info']) && !empty($ragContext['seller_info']['whatsapp'])) {
+            $whatsapp = $ragContext['seller_info']['whatsapp'];
+            if ($whatsapp !== 'Tidak tersedia') {
+                $fallback .= "\n\nUntuk bantuan langsung, hubungi WhatsApp: {$whatsapp}";
+            }
+        }
+
+        return $fallback;
     }
 
     /**
@@ -562,37 +744,45 @@ class ChatbotService
     {
         $cleaned = trim($response);
 
-        // Hapus semua pattern thinking/reasoning yang mungkin ada
+        // Remove thinking patterns
         $thinkingPatterns = ['/<think>.*?<\/think>/si', '/<thinking>.*?<\/thinking>/si', '/\[thinking\].*?\[\/thinking\]/si', '/\*thinking\*.*?\*\/thinking\*/si', '/\*\*thinking\*\*.*?\*\*\/thinking\*\*/si', '/<!-- thinking -->.*?<!-- \/thinking -->/si', '/\{thinking\}.*?\{\/thinking\}/si', '/\(thinking\).*?\(\/thinking\)/si'];
 
         foreach ($thinkingPatterns as $pattern) {
             $cleaned = preg_replace($pattern, '', $cleaned);
         }
 
-        // Hapus prefiks yang tidak diinginkan
+        // Remove prefixes
         $prefixes = ['Customer Service:', 'CS:', 'Admin:', 'Jawaban:', 'Reply:', 'Response:'];
-
         foreach ($prefixes as $prefix) {
             if (stripos($cleaned, $prefix) === 0) {
                 $cleaned = trim(substr($cleaned, strlen($prefix)));
             }
         }
 
-        // Hapus whitespace berlebih dan bersihkan
-        $cleaned = preg_replace('/\s+/', ' ', $cleaned);
-        $cleaned = trim($cleaned);
+        $cleaned = preg_replace('/\*\*(.*?)\*\*/', '$1', $cleaned); // Remove **bold**
+        $cleaned = preg_replace('/\*(.*?)\*/', '$1', $cleaned); // Remove *italic*
+        $cleaned = preg_replace('/_{2,}(.*?)_{2,}/', '$1', $cleaned); // Remove __underline__
+        $cleaned = preg_replace('/_([^_]+)_/', '$1', $cleaned); // Remove _single underscore_
 
-        // Hapus karakter yang tidak diinginkan di awal
+        $cleaned = preg_replace('/\s+/', ' ', $cleaned);
+
+        $cleaned = preg_replace('/(\d+\.\s)/', "\n$1", $cleaned);
+
+        $cleaned = preg_replace('/([^\n])\s*(-\s|•\s)/', "$1\n$2", $cleaned);
+
+        $cleaned = preg_replace('/([^\n])\s*(🔹\s)/', "$1\n$2", $cleaned);
+
+        $cleaned = preg_replace('/\n{3,}/', "\n\n", $cleaned);
+
         $cleaned = ltrim($cleaned, ':-*');
         $cleaned = trim($cleaned);
 
-        // Jika response kosong atau terlalu pendek, gunakan fallback
         if (empty($cleaned) || mb_strlen($cleaned) < 5) {
             $cleaned = 'Halo! Terima kasih sudah menghubungi kami 😊 Ada yang bisa saya bantu?';
         }
 
-        // Pastikan ada tanda baca di akhir
-        if (!preg_match('/[.!?]$/', $cleaned)) {
+        $lastChar = mb_substr(trim($cleaned), -1);
+        if (!preg_match('/[.!?😊👍🙏]$/', $lastChar)) {
             $cleaned .= '.';
         }
 
@@ -606,7 +796,6 @@ class ChatbotService
         try {
             $setting = $this->getChatbotSetting($sellerId);
 
-            // Delay response sesuai setting
             $delay = $responseDelay ?? ($setting->response_delay ?? 0);
             Log::info('Chatbot preparing response', [
                 'customer_id' => $customerId,
@@ -615,12 +804,10 @@ class ChatbotService
                 'response_preview' => substr($response, 0, 100),
             ]);
 
-            // Simulasi delay response (dalam detik)
             if ($delay > 0) {
                 sleep($delay);
             }
 
-            // Buat dan simpan pesan
             $message = new CustomerSellerConversation();
             $message->customer_id = $customerId;
             $message->seller_id = $sellerId;
@@ -636,10 +823,8 @@ class ChatbotService
                 'sender_role' => $message->sender_role,
             ]);
 
-            // Load relasi yang diperlukan untuk event
             $message->load(['customer', 'seller', 'seller.sellerShop']);
 
-            // Emit event untuk real-time update
             event(new NewMessageSent($message, $customerId, $sellerId));
 
             Log::info('Chatbot NewMessageSent event dispatched', [
@@ -649,15 +834,11 @@ class ChatbotService
                 'event_class' => NewMessageSent::class,
             ]);
 
-            // ** PERBAIKAN: Tambahkan WhatsApp notification untuk chatbot reply **
             try {
-                // Instantiate WhatsAppService
                 $whatsappService = app(WhatsAppService::class);
 
-                // Get customer name for notification
                 $customerName = $message->customer->name ?? 'Customer';
 
-                // Send WhatsApp notification to seller about chatbot reply
                 $notificationSent = $whatsappService->notifyChatbotReply($sellerId, $customerName, $response);
 
                 if ($notificationSent) {
@@ -683,7 +864,6 @@ class ChatbotService
                     'error' => $e->getMessage(),
                     'trace' => $e->getTraceAsString(),
                 ]);
-                // Don't throw exception here to avoid breaking the main flow
             }
         } catch (\Exception $e) {
             Log::error('Failed to save chatbot response', [
@@ -693,7 +873,6 @@ class ChatbotService
                 'trace' => $e->getTraceAsString(),
             ]);
 
-            // Re-throw exception to let calling code handle it
             throw $e;
         }
     }
@@ -701,14 +880,11 @@ class ChatbotService
     public function handleChatbotFailure($customerId, $sellerId, $originalMessage): void
     {
         try {
-            // Instantiate WhatsAppService
             $whatsappService = app(WhatsAppService::class);
 
-            // Get customer info
             $customer = \App\Models\User::find($customerId);
             $customerName = $customer->name ?? 'Customer';
 
-            // Send WhatsApp notification about chatbot failure
             $notificationSent = $whatsappService->notifyNoReply($sellerId, $customerName, 0, $originalMessage);
 
             if ($notificationSent) {

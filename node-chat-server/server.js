@@ -192,17 +192,14 @@ class ChatServer {
     try {
       const wasOffline = !this.userConnections.has(globalUserId);
 
-      // Add socket to tracking
       this.addSocketConnection(globalUserId, socketId);
 
-      // Clear any pending disconnect timer
       if (this.disconnectTimers.has(globalUserId)) {
         clearTimeout(this.disconnectTimers.get(globalUserId));
         this.disconnectTimers.delete(globalUserId);
         console.log(`Cleared disconnect timer for ${globalUserId}`);
       }
 
-      // Only broadcast if user was previously offline
       if (wasOffline) {
         await this.redis.publisher.sadd("online_users", globalUserId);
 

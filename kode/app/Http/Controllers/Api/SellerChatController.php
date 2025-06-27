@@ -33,38 +33,32 @@ class SellerChatController extends Controller
         });
     }
 
-
-
     public function list ():JsonResponse {
 
-
-    
         $sellerIds = CustomerSellerConversation::with(['customer','customer.country'])
                                     ->where('customer_id',$this->user->id)
-                                    ->select('seller_id') 
+                                    ->select('seller_id')
                                     ->distinct()
                                     ->pluck('seller_id')
                                     ->toArray();
 
         $sellers = Seller::with(['latestConversation'])->whereIn('id',   $sellerIds)->get();
 
-        return api([ 
+        return api([
 
             'sellers'                  => new SellerCollection($sellers),
         ])->success(__('response.success'));
 
     }
-  
-
 
     public function getChat ($seller_id):JsonResponse {
 
 
         $seller = Seller::with(['sellerShop'])->find($seller_id);
-        
+
         if(!$seller)  return api(['errors'=> [translate("Invalid Seller")]])->fails(__('response.fail'));
-        
-        
+
+
         CustomerSellerConversation::with(['customer','customer.country','seller','seller.sellerShop'])
                                     ->latest()
                                     ->where('seller_id',$seller_id)
@@ -75,16 +69,16 @@ class SellerChatController extends Controller
                                     ->update([
                                         'is_seen' => 1
                                     ]);
-        
+
         $messages = CustomerSellerConversation::with(['customer','customer.country','seller','seller.sellerShop'])
                                     ->latest()
                                     ->where('seller_id',$seller_id)
                                     ->where('customer_id',$this->user->id)
                                     ->paginate(paginate_number());
-              
-                   
 
-        return api([ 
+
+
+        return api([
             'user'           => new UserResource($this->user),
             'seller'         => new SellerResource($seller),
             'messages'       => new SellerConversationCollection($messages),
@@ -106,7 +100,7 @@ class SellerChatController extends Controller
         $request->validate([
             'seller_id' => 'required|exists:sellers,id',
             'message' => 'required|max:191',
-            'files.*'  => ["nullable",new FileExtentionCheckRule(['pdf','doc','exel','jpg','jpeg','png','jfif','webp'],'file')] 
+            'files.*'  => ["nullable",new FileExtentionCheckRule(['pdf','doc','exel','jpg','jpeg','png','jfif','webp'],'file')]
         ]);
 
         $seller = Seller::with(['sellerShop'])->find($request->input('seller_id'));
@@ -148,6 +142,6 @@ class SellerChatController extends Controller
                 'message'  => translate('Message sent succesfully'),
             ])->success(__('response.success'));
     }
-  
- 
+
+
 }
